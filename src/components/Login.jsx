@@ -8,6 +8,17 @@ export default function Login({ onLogin }) {
   const [loading, setLoading] = useState(false)
   const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 900 : false
 
+  function setTheme(nextTheme) {
+    document.documentElement.dataset.theme = nextTheme
+    localStorage.setItem('workspace-theme', nextTheme)
+  }
+
+  function adjustFontScale(nextScale) {
+    const clamped = Math.max(0.9, Math.min(1.2, nextScale))
+    document.documentElement.style.setProperty('--font-scale', String(clamped))
+    localStorage.setItem('workspace-font-scale', String(clamped))
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
@@ -31,6 +42,12 @@ export default function Login({ onLogin }) {
         background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)',
         borderRadius: '16px', padding: isMobile ? '28px 20px' : '40px 36px', width: '100%', maxWidth: isMobile ? 'calc(100vw - 24px)' : '360px'
       }}>
+        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <button onClick={() => adjustFontScale(parseFloat(localStorage.getItem('workspace-font-scale') || '1') - 0.1)} style={{ padding: '5px 8px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', fontSize: '11px', cursor: 'pointer' }}>A-</button>
+          <button onClick={() => adjustFontScale(1)} style={{ padding: '5px 8px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', fontSize: '11px', cursor: 'pointer' }}>A</button>
+          <button onClick={() => adjustFontScale(parseFloat(localStorage.getItem('workspace-font-scale') || '1') + 0.1)} style={{ padding: '5px 8px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', fontSize: '11px', cursor: 'pointer' }}>A+</button>
+          <button onClick={() => setTheme((document.documentElement.dataset.theme || 'light') === 'dark' ? 'light' : 'dark')} style={{ padding: '5px 8px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', fontSize: '11px', cursor: 'pointer' }}>Theme</button>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
           <div style={{
             width: '32px', height: '32px', borderRadius: '8px', background: '#1D9E75',

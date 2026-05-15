@@ -23,6 +23,11 @@ export default function App() {
   const [currentNoteId, setCurrentNoteId] = useState(null)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 900)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'light')
+  const [fontScale, setFontScale] = useState(() => {
+    const saved = parseFloat(localStorage.getItem('workspace-font-scale') || '1')
+    return Number.isFinite(saved) ? saved : 1
+  })
 
   // Check if already authed by trying to load data
   useEffect(() => {
@@ -59,6 +64,17 @@ export default function App() {
   useEffect(() => {
     if (!isMobile) setMobileMenuOpen(false)
   }, [isMobile])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('workspace-theme', theme)
+  }, [theme])
+
+  useEffect(() => {
+    const nextScale = Math.max(0.9, Math.min(1.2, fontScale))
+    document.documentElement.style.setProperty('--font-scale', String(nextScale))
+    localStorage.setItem('workspace-font-scale', String(nextScale))
+  }, [fontScale])
 
   async function handleLogin() {
     const data = await getNotes()
@@ -105,6 +121,20 @@ export default function App() {
   const noteDone = todos.filter(t => t.done).length
   const totalTodos = todos.length
   const currentView = VIEWS.find(v => v.id === view)
+
+  function controlButtonStyle(isActive = false) {
+    return {
+      padding: '6px 8px',
+      borderRadius: '8px',
+      border: '0.5px solid var(--color-border-secondary)',
+      background: isActive ? '#E1F5EE' : 'var(--color-background-primary)',
+      color: isActive ? '#085041' : 'var(--color-text-secondary)',
+      fontSize: '11px',
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+      minWidth: '34px'
+    }
+  }
 
   return (
     <div style={{
@@ -161,6 +191,20 @@ export default function App() {
                 <i className={`ti ${mobileMenuOpen ? 'ti-x' : 'ti-menu-2'}`} style={{ fontSize: '18px' }} />
               </button>
             )}
+          </div>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '10px', flexWrap: 'wrap' }}>
+            <button onClick={() => setFontScale(prev => Math.max(0.9, +(prev - 0.1).toFixed(2)))} style={controlButtonStyle()}>
+              A-
+            </button>
+            <button onClick={() => setFontScale(1)} style={controlButtonStyle(fontScale === 1)}>
+              A
+            </button>
+            <button onClick={() => setFontScale(prev => Math.min(1.2, +(prev + 0.1).toFixed(2)))} style={controlButtonStyle()}>
+              A+
+            </button>
+            <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} style={controlButtonStyle(theme === 'dark')}>
+              {theme === 'dark' ? 'Dark' : 'Light'}
+            </button>
           </div>
         </div>
 

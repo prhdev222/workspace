@@ -138,8 +138,10 @@ function layoutMindMap(map) {
 
   const maxDepth = depths.length ? Math.max(...depths) : 0
   const width = marginX * 2 + (maxDepth + 1) * colWidth
-  const deepestColumnCount = Math.max(...depths.map(depth => nodesByDepth.get(depth).length), 1)
-  const height = Math.max(560, marginY * 2 + deepestColumnCount * rowHeight + 80)
+  const lowestNodeEdge = positionedNodes.length
+    ? Math.max(...positionedNodes.map(node => node.y + node.height))
+    : 0
+  const height = Math.max(560, lowestNodeEdge + marginY + 36)
 
   return {
     nodes: positionedNodes,
