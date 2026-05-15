@@ -29,11 +29,12 @@
       background: var(--color-background-tertiary);
       color: var(--color-text-primary);
       -webkit-font-smoothing: antialiased;
+      overflow: auto;
     }
     #root {
       zoom: var(--font-scale);
-      width: calc(100% / var(--font-scale));
-      height: calc(100% / var(--font-scale));
+      min-height: 100%;
+      width: 100%;
     }
     :root[data-theme='light'] {
       --color-background-primary: #ffffff;
