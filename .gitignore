@@ -1,0 +1,11 @@
+.dev.vars
+.der.vars
+.env
+.env.*
+!.env.example
+!.dev.vars.example
+node_modules/
+dist/
+.config/
+.wrangler/
+.npm/
