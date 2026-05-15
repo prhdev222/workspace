@@ -382,7 +382,8 @@ export default function MindMapPanel({ isMobile = false }) {
             padding: '16px',
             borderRadius: '18px',
             border: '0.5px solid var(--color-border-tertiary)',
-            background: 'var(--color-background-secondary)'
+            background: 'var(--color-background-secondary)',
+            minWidth: 0
           }}
         >
           <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>
@@ -393,48 +394,52 @@ export default function MindMapPanel({ isMobile = false }) {
               No saved maps yet. Generate and save one from the editor.
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: '10px' }}>
+            <div style={{ display: 'grid', gap: '10px', minWidth: 0 }}>
               {savedMaps.map(saved => (
-                <div key={saved.id} style={{ padding: '12px', borderRadius: '14px', background: 'var(--color-background-primary)', border: saved.id === currentMapId ? '1px solid #1D9E75' : '0.5px solid var(--color-border-tertiary)' }}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div key={saved.id} style={{ padding: '12px', borderRadius: '14px', background: 'var(--color-background-primary)', border: saved.id === currentMapId ? '1px solid #1D9E75' : '0.5px solid var(--color-border-tertiary)', minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', minWidth: 0 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-primary)', lineHeight: '1.5', wordBreak: 'break-word' }}>
                         {saved.title}
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px', lineHeight: '1.5' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                         {(saved.content || '').slice(0, 90) || 'No content'}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleLoad(saved)}
-                      style={{
-                        padding: '6px 10px',
-                        background: '#E1F5EE',
-                        color: '#085041',
-                        border: 'none',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
-                      }}
-                    >
-                      Open
-                    </button>
-                    <button
-                      onClick={() => handleDeleteSaved(saved.id)}
-                      style={{
-                        padding: '6px 9px',
-                        background: 'transparent',
-                        color: '#A24646',
-                        border: '0.5px solid rgba(162,70,70,0.18)',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
-                      }}
-                    >
-                      Delete
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0, width: isMobile ? '100%' : 'auto' }}>
+                      <button
+                        onClick={() => handleLoad(saved)}
+                        style={{
+                          padding: '6px 10px',
+                          background: '#E1F5EE',
+                          color: '#085041',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          width: isMobile ? '100%' : 'auto'
+                        }}
+                      >
+                        Open
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSaved(saved.id)}
+                        style={{
+                          padding: '6px 9px',
+                          background: 'transparent',
+                          color: '#A24646',
+                          border: '0.5px solid rgba(162,70,70,0.18)',
+                          borderRadius: '8px',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          width: isMobile ? '100%' : 'auto'
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
