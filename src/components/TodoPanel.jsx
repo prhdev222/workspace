@@ -8,7 +8,7 @@ const PRIO = {
   low:  { bg: '#E1F5EE', color: '#085041' },
 }
 
-export default function TodoPanel({ todos, setTodos }) {
+export default function TodoPanel({ todos, setTodos, isMobile = false }) {
   const [newText, setNewText] = useState('')
   const [newSection, setNewSection] = useState('today')
   const [newPrio, setNewPrio] = useState('med')
@@ -94,9 +94,9 @@ export default function TodoPanel({ todos, setTodos }) {
   }
 
   return (
-    <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
+    <div style={{ padding: isMobile ? '16px 14px 24px' : '20px 24px', overflowY: 'auto', flex: 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h2 style={{ fontFamily: "'Lora', serif", fontSize: '20px', fontWeight: '500' }}>To-Do List</h2>
+        <h2 style={{ fontFamily: "'Lora', serif", fontSize: isMobile ? '18px' : '20px', fontWeight: '500' }}>To-Do List</h2>
         <span style={{ fontSize: '12px', color: '#1D9E75', fontWeight: '500' }}>{done} / {total} done · {pct}%</span>
       </div>
 
@@ -137,7 +137,8 @@ export default function TodoPanel({ todos, setTodos }) {
           <button onClick={add} style={{
             padding: '6px 16px', background: '#1D9E75', color: 'white', border: 'none',
             borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit',
-            marginLeft: 'auto'
+            marginLeft: isMobile ? '0' : 'auto',
+            width: isMobile ? '100%' : 'auto'
           }}>
             <i className="ti ti-plus" /> Add
           </button>

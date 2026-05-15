@@ -17,7 +17,7 @@ const BLOCK_ICONS = {
   bullet:  'ti-point',
 }
 
-export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew }) {
+export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew, isMobile = false }) {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState([])
   const [blocks, setBlocks] = useState([])
@@ -82,10 +82,13 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
   }
 
   return (
-    <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row' }}>
       {/* Sidebar note list */}
       <div style={{
-        width: '220px', borderRight: '0.5px solid var(--color-border-tertiary)',
+        width: isMobile ? '100%' : '220px',
+        maxHeight: isMobile ? '160px' : 'none',
+        borderRight: isMobile ? 'none' : '0.5px solid var(--color-border-tertiary)',
+        borderBottom: isMobile ? '0.5px solid var(--color-border-tertiary)' : 'none',
         display: 'flex', flexDirection: 'column', background: 'var(--color-background-secondary)'
       }}>
         <div style={{ padding: '10px 8px' }}>
@@ -98,11 +101,18 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
             <i className="ti ti-plus" /> New note
           </button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+        <div style={{
+          flex: 1,
+          overflowY: isMobile ? 'hidden' : 'auto',
+          overflowX: isMobile ? 'auto' : 'hidden',
+          padding: '0 8px 8px',
+          display: isMobile ? 'flex' : 'block',
+          gap: isMobile ? '8px' : '0'
+        }}>
           {notes.map(n => (
             <div key={n.id} onClick={() => onSelect(n.id)}
               style={{
-                padding: '8px', borderRadius: '8px', cursor: 'pointer', marginBottom: '2px',
+                padding: '8px', borderRadius: '8px', cursor: 'pointer', marginBottom: isMobile ? '0' : '2px',
                 background: n.id === currentId ? '#E1F5EE' : 'transparent'
               }}>
               <div style={{
@@ -121,7 +131,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Toolbar */}
         <div style={{
-          padding: '8px 20px', borderBottom: '0.5px solid var(--color-border-tertiary)',
+          padding: isMobile ? '8px 12px' : '8px 20px', borderBottom: '0.5px solid var(--color-border-tertiary)',
           display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap'
         }}>
           {[['heading','ti-heading'],['text','ti-text-size'],['todo','ti-checkbox'],['quote','ti-quote'],['bullet','ti-list']].map(([type, icon]) => (
@@ -150,7 +160,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 14px 22px' : '24px 32px' }}>
           {currentId ? (
             <>
               <input
@@ -159,7 +169,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
                 onChange={e => setTitle(e.target.value)}
                 placeholder="Untitled note…"
                 style={{
-                  fontFamily: "'Lora', serif", fontSize: '26px', fontWeight: '500',
+                  fontFamily: "'Lora', serif", fontSize: isMobile ? '22px' : '26px', fontWeight: '500',
                   color: 'var(--color-text-primary)', border: 'none', outline: 'none',
                   background: 'transparent', width: '100%', marginBottom: '10px', lineHeight: 1.3
                 }}

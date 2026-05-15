@@ -42,5 +42,11 @@ export const getIdeas = () => req('GET', '/ideas')
 export const createIdea = (data) => req('POST', '/ideas', data)
 export const deleteIdea = (id) => req('DELETE', `/ideas/${id}`)
 
+// Mind maps
+export const getMindMaps = () => req('GET', '/mindmaps')
+export const createMindMap = (data) => req('POST', '/mindmaps', data)
+export const updateMindMap = (id, data) => req('PUT', `/mindmaps/${id}`, data)
+export const deleteMindMap = (id) => req('DELETE', `/mindmaps/${id}`)
+
 // Init DB tables (run once)
 export const initDb = () => req('GET', '/init')

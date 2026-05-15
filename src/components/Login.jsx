@@ -6,6 +6,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 900 : false
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -28,7 +29,7 @@ export default function Login({ onLogin }) {
     }}>
       <div style={{
         background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-secondary)',
-        borderRadius: '16px', padding: '40px 36px', width: '100%', maxWidth: '360px'
+        borderRadius: '16px', padding: isMobile ? '28px 20px' : '40px 36px', width: '100%', maxWidth: isMobile ? 'calc(100vw - 24px)' : '360px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '28px' }}>
           <div style={{
