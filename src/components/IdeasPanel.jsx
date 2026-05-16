@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createIdea, deleteIdea } from '../lib/api'
+import LinkedItemsPanel from './LinkedItemsPanel'
 
 const COLORS = {
   teal: {
@@ -66,7 +67,7 @@ function summarize(text) {
   return `${trimmed.slice(0, 84).trim()}...`
 }
 
-export default function IdeasPanel({ ideas, setIdeas, isMobile = false, externalSearch = '' }) {
+export default function IdeasPanel({ ideas, setIdeas, isMobile = false, externalSearch = '', selectedIdeaId = null, setSelectedIdeaId, links = [], setLinks, entities, onNavigate }) {
   const [text, setText] = useState('')
   const [color, setColor] = useState('teal')
   const [search, setSearch] = useState(externalSearch)
@@ -290,8 +291,9 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
           {filteredIdeas.map(idea => {
             const palette = COLORS[idea.color] || COLORS.teal
             return (
+              <div key={idea.id}>
               <article
-                key={idea.id}
+                onClick={() => setSelectedIdeaId?.(idea.id)}
                 style={{
                   padding: '16px',
                   borderRadius: '18px',
@@ -299,9 +301,10 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
                   background: `linear-gradient(180deg, ${palette.panel} 0%, ${palette.card} 100%)`,
                   minHeight: '210px',
                   position: 'relative',
+                  cursor: 'pointer',
                   display: 'flex',
                   flexDirection: 'column',
-                  boxShadow: '0 12px 24px rgba(0,0,0,0.04)'
+                  boxShadow: selectedIdeaId === idea.id ? `0 12px 24px ${palette.border}` : '0 12px 24px rgba(0,0,0,0.04)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px', paddingRight: '28px' }}>
@@ -345,7 +348,7 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
                     {idea.color}
                   </span>
                   <button
-                    onClick={() => remove(idea.id)}
+                    onClick={e => { e.stopPropagation(); remove(idea.id) }}
                     style={{
                       background: 'rgba(255,255,255,0.58)',
                       border: 'none',
@@ -362,6 +365,18 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
                   </button>
                 </div>
               </article>
+              {selectedIdeaId === idea.id && (
+                <LinkedItemsPanel
+                  sourceType="ideas"
+                  sourceId={idea.id}
+                  links={links}
+                  setLinks={setLinks}
+                  entities={entities}
+                  onNavigate={onNavigate}
+                  compact
+                />
+              )}
+              </div>
             )
           })}
         </div>

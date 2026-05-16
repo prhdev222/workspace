@@ -1,6 +1,7 @@
 // src/components/TodoPanel.jsx
 import { useEffect, useState } from 'react'
 import { createTodo, updateTodo, deleteTodo } from '../lib/api'
+import LinkedItemsPanel from './LinkedItemsPanel'
 
 const PRIO = {
   high: { bg: '#FCEBEB', color: '#A32D2D' },
@@ -72,7 +73,7 @@ function getAgendaSortValue(todo) {
   return `${date}T${time}`
 }
 
-export default function TodoPanel({ todos, setTodos, isMobile = false, externalSearch = '' }) {
+export default function TodoPanel({ todos, setTodos, isMobile = false, externalSearch = '', selectedTodoId = null, setSelectedTodoId, links = [], setLinks, entities, onNavigate }) {
   const [agendaView, setAgendaView] = useState('today')
   const [agendaDate, setAgendaDate] = useState(toIsoDate())
   const [selectedAgendaItemId, setSelectedAgendaItemId] = useState(null)
@@ -203,17 +204,18 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
           {label}
           <div style={{ flex: 1, height: '0.5px', background: 'var(--color-border-tertiary)' }} />
         </div>
-        {items.map(t => (
-          (() => {
-            const typeStyle = TYPE_STYLES[t.item_type] || TYPE_STYLES.task
-            return (
-          <div key={t.id} style={{
+        {items.map(t => {
+          const typeStyle = TYPE_STYLES[t.item_type] || TYPE_STYLES.task
+          return (
+          <div key={t.id}>
+          <div style={{
             display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '8px 10px',
             borderRadius: '8px', border: '0.5px solid var(--color-border-tertiary)',
-            background: 'var(--color-background-primary)', marginBottom: '6px',
+            background: selectedTodoId === t.id ? '#F8FCFA' : 'var(--color-background-primary)', marginBottom: '6px',
             opacity: t.done ? 0.55 : 1
-          }}>
-            <div onClick={() => toggle(t)} style={{
+          }}
+          onClick={() => setSelectedTodoId?.(t.id)}>
+            <div onClick={e => { e.stopPropagation(); toggle(t) }} style={{
               width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, marginTop: '1px',
               border: `1.5px solid ${t.done ? '#1D9E75' : t.priority === 'high' ? '#E24B4A' : 'var(--color-border-secondary)'}`,
               background: t.done ? '#1D9E75' : 'transparent',
@@ -286,6 +288,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
                   href={t.attachment_url}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={e => e.stopPropagation()}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -301,13 +304,24 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
                 </a>
               )}
             </div>
-            <button onClick={() => remove(t.id)} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: '13px', opacity: 0.5 }}>
+            <button onClick={e => { e.stopPropagation(); remove(t.id) }} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: '13px', opacity: 0.5 }}>
               <i className="ti ti-trash" />
             </button>
           </div>
-            )
-          })()
-        ))}
+          {selectedTodoId === t.id && (
+            <LinkedItemsPanel
+              sourceType="todo"
+              sourceId={t.id}
+              links={links}
+              setLinks={setLinks}
+              entities={entities}
+              onNavigate={onNavigate}
+              compact
+            />
+          )}
+          </div>
+          )
+        })}
       </div>
     )
   }

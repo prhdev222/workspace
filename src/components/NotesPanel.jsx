@@ -1,6 +1,7 @@
 // src/components/NotesPanel.jsx
 import { useState, useEffect, useRef } from 'react'
 import { updateNote, deleteNote } from '../lib/api'
+import LinkedItemsPanel from './LinkedItemsPanel'
 
 const TAG_STYLES = {
   lecture: { bg: '#E6F1FB', color: '#185FA5', label: '📖 Lecture' },
@@ -157,7 +158,7 @@ function formatPlacementLabel(placement) {
   return 'Inside target'
 }
 
-export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew, isMobile = false, externalSearch = '' }) {
+export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew, isMobile = false, externalSearch = '', links = [], setLinks, entities, onNavigate }) {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState([])
   const [blocks, setBlocks] = useState([])
@@ -875,6 +876,15 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
                   </div>
                 )}
               </div>
+
+              <LinkedItemsPanel
+                sourceType="notes"
+                sourceId={currentId}
+                links={links}
+                setLinks={setLinks}
+                entities={entities}
+                onNavigate={onNavigate}
+              />
 
               {/* Blocks */}
               {blocks.map((b, i) => (

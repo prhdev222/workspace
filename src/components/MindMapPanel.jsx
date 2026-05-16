@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createMindMap, deleteMindMap, updateMindMap } from '../lib/api'
+import LinkedItemsPanel from './LinkedItemsPanel'
 
 const BRANCH_COLORS = ['#1D9E75', '#378ADD', '#7F77DD', '#EF9F27', '#E24B4A', '#D4537E']
 const INITIAL_TEXT = ''
@@ -161,7 +162,7 @@ function mindMapMatchesSearch(item, query) {
   return [item.title, item.content].join(' ').toLowerCase().includes(normalized)
 }
 
-export default function MindMapPanel({ isMobile = false, savedMaps = [], setSavedMaps, externalSearch = '', openMapId = null }) {
+export default function MindMapPanel({ isMobile = false, savedMaps = [], setSavedMaps, externalSearch = '', openMapId = null, links = [], setLinks, entities, onNavigate }) {
   const [draft, setDraft] = useState(INITIAL_TEXT)
   const [map, setMap] = useState(null)
   const [isExpanded, setIsExpanded] = useState(false)
@@ -394,6 +395,17 @@ export default function MindMapPanel({ isMobile = false, savedMaps = [], setSave
             <br />
             Press {'`Cmd/Ctrl + Enter`'} to generate quickly.
           </div>
+          {currentMapId && (
+            <LinkedItemsPanel
+              sourceType="mindmap"
+              sourceId={currentMapId}
+              links={links}
+              setLinks={setLinks}
+              entities={entities}
+              onNavigate={onNavigate}
+              compact
+            />
+          )}
         </div>
 
         <div

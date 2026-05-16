@@ -48,5 +48,15 @@ export const createMindMap = (data) => req('POST', '/mindmaps', data)
 export const updateMindMap = (id, data) => req('PUT', `/mindmaps/${id}`, data)
 export const deleteMindMap = (id) => req('DELETE', `/mindmaps/${id}`)
 
+// Links
+export const getLinks = (params) => {
+  const search = params
+    ? `?${new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null)).toString()}`
+    : ''
+  return req('GET', `/links${search}`)
+}
+export const createLink = (data) => req('POST', '/links', data)
+export const deleteLink = (id) => req('DELETE', `/links/${id}`)
+
 // Init DB tables (run once)
 export const initDb = () => req('GET', '/init')

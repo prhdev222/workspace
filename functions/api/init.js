@@ -57,6 +57,15 @@ export async function onRequestGet({ env }) {
         content TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS links (
+        id TEXT PRIMARY KEY,
+        from_type TEXT NOT NULL,
+        from_id TEXT NOT NULL,
+        to_type TEXT NOT NULL,
+        to_id TEXT NOT NULL,
+        label TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL
       )`
     ]
 

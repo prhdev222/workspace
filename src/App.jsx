@@ -5,7 +5,7 @@ import NotesPanel from './components/NotesPanel'
 import TodoPanel from './components/TodoPanel'
 import MindMapPanel from './components/MindMapPanel'
 import IdeasPanel from './components/IdeasPanel'
-import { getNotes, getTodos, getIdeas, getMindMaps, createNote, logout } from './lib/api'
+import { getNotes, getTodos, getIdeas, getMindMaps, getLinks, createNote, logout } from './lib/api'
 
 const VIEWS = [
   { id: 'notes',   label: 'Notes',    icon: 'ti-file-text' },
@@ -21,7 +21,10 @@ export default function App() {
   const [todos, setTodos] = useState([])
   const [ideas, setIdeas] = useState([])
   const [mindMaps, setMindMaps] = useState([])
+  const [links, setLinks] = useState([])
   const [currentNoteId, setCurrentNoteId] = useState(null)
+  const [selectedTodoId, setSelectedTodoId] = useState(null)
+  const [selectedIdeaId, setSelectedIdeaId] = useState(null)
   const [globalSearch, setGlobalSearch] = useState('')
   const [openMindMapId, setOpenMindMapId] = useState(null)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 900)
@@ -59,6 +62,12 @@ export default function App() {
         if (err?.status === 401) setAuthed(false)
         else console.error(err)
       })
+    getLinks()
+      .then(setLinks)
+      .catch(err => {
+        if (err?.status === 401) setAuthed(false)
+        else console.error(err)
+      })
   }, [authed])
 
   useEffect(() => {
@@ -89,15 +98,15 @@ export default function App() {
     const data = await getNotes()
     setNotes(data)
     setCurrentNoteId(data[0]?.id || null)
-    const [td, id, mm] = await Promise.all([getTodos(), getIdeas(), getMindMaps()])
-    setTodos(td); setIdeas(id); setMindMaps(mm)
+    const [td, id, mm, lk] = await Promise.all([getTodos(), getIdeas(), getMindMaps(), getLinks()])
+    setTodos(td); setIdeas(id); setMindMaps(mm); setLinks(lk)
     setAuthed(true)
   }
 
   async function handleLogout() {
     await logout()
     setAuthed(false)
-    setNotes([]); setTodos([]); setIdeas([]); setMindMaps([])
+    setNotes([]); setTodos([]); setIdeas([]); setMindMaps([]); setLinks([])
   }
 
   async function handleNewNote(parentId = null) {
@@ -181,12 +190,28 @@ export default function App() {
     if (result.type === 'notes') {
       setCurrentNoteId(result.targetId)
     }
+    if (result.type === 'todo') {
+      setSelectedTodoId(result.targetId)
+    }
+    if (result.type === 'ideas') {
+      setSelectedIdeaId(result.targetId)
+    }
 
     if (result.type === 'mindmap') {
       setOpenMindMapId(result.targetId)
     } else {
       setOpenMindMapId(null)
     }
+  }
+
+  function navigateToEntity(type, id) {
+    setView(type === 'ideas' ? 'ideas' : type)
+    setMobileMenuOpen(false)
+
+    if (type === 'notes') setCurrentNoteId(id)
+    if (type === 'todo') setSelectedTodoId(id)
+    if (type === 'ideas') setSelectedIdeaId(id)
+    if (type === 'mindmap') setOpenMindMapId(id)
   }
 
   function controlButtonStyle(isActive = false) {
@@ -409,11 +434,15 @@ export default function App() {
             onNew={handleNewNote}
             isMobile={isMobile}
             externalSearch={globalSearch}
+            links={links}
+            setLinks={setLinks}
+            entities={{ notes, todos, ideas, mindMaps }}
+            onNavigate={navigateToEntity}
           />
         )}
-        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} />}
-        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} />}
-        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} />}
+        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} selectedTodoId={selectedTodoId} setSelectedTodoId={setSelectedTodoId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
+        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
+        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} selectedIdeaId={selectedIdeaId} setSelectedIdeaId={setSelectedIdeaId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
       </div>
     </div>
   )
