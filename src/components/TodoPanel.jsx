@@ -1,5 +1,5 @@
 // src/components/TodoPanel.jsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createTodo, updateTodo, deleteTodo } from '../lib/api'
 
 const PRIO = {
@@ -8,15 +8,31 @@ const PRIO = {
   low:  { bg: '#E1F5EE', color: '#085041' },
 }
 
-export default function TodoPanel({ todos, setTodos, isMobile = false }) {
+function todoMatchesSearch(todo, query) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+
+  return [todo.text, todo.priority, todo.due_label, todo.section]
+    .join(' ')
+    .toLowerCase()
+    .includes(normalized)
+}
+
+export default function TodoPanel({ todos, setTodos, isMobile = false, externalSearch = '' }) {
   const [newText, setNewText] = useState('')
   const [newSection, setNewSection] = useState('today')
   const [newPrio, setNewPrio] = useState('med')
   const [newDue, setNewDue] = useState('today')
+  const [search, setSearch] = useState(externalSearch)
 
   const done = todos.filter(t => t.done).length
   const total = todos.length
   const pct = total ? Math.round(done / total * 100) : 0
+  const filteredTodos = todos.filter(todo => todoMatchesSearch(todo, search))
+
+  useEffect(() => {
+    setSearch(externalSearch)
+  }, [externalSearch])
 
   async function toggle(todo) {
     try {
@@ -100,13 +116,49 @@ export default function TodoPanel({ todos, setTodos, isMobile = false }) {
         <span style={{ fontSize: '12px', color: '#1D9E75', fontWeight: '500' }}>{done} / {total} done · {pct}%</span>
       </div>
 
+      <div style={{ position: 'relative', marginBottom: '14px' }}>
+        <i
+          className="ti ti-search"
+          style={{
+            position: 'absolute',
+            left: '11px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            fontSize: '12px',
+            color: 'var(--color-text-tertiary)'
+          }}
+        />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search tasks, due date, or priority"
+          style={{
+            width: '100%',
+            padding: '9px 12px 9px 32px',
+            border: '0.5px solid var(--color-border-secondary)',
+            borderRadius: '10px',
+            fontSize: '12px',
+            fontFamily: 'inherit',
+            background: 'var(--color-background-primary)',
+            color: 'var(--color-text-primary)',
+            outline: 'none',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
+
       <div style={{ height: '4px', background: 'var(--color-background-tertiary)', borderRadius: '2px', marginBottom: '20px', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: '#1D9E75', borderRadius: '2px', transition: 'width 0.3s' }} />
       </div>
 
-      <Section label="Today" items={todos.filter(t => !t.done && t.section === 'today')} />
-      <Section label="Upcoming" items={todos.filter(t => !t.done && t.section === 'upcoming')} />
-      <Section label="Done" items={todos.filter(t => t.done)} />
+      <Section label="Today" items={filteredTodos.filter(t => !t.done && t.section === 'today')} />
+      <Section label="Upcoming" items={filteredTodos.filter(t => !t.done && t.section === 'upcoming')} />
+      <Section label="Done" items={filteredTodos.filter(t => t.done)} />
+      {filteredTodos.length === 0 && (
+        <div style={{ padding: '14px', borderRadius: '12px', background: 'var(--color-background-secondary)', color: 'var(--color-text-tertiary)', fontSize: '12px', marginBottom: '16px' }}>
+          No tasks match this search.
+        </div>
+      )}
 
       {/* Add new */}
       <div style={{ marginTop: '16px', padding: '14px', border: '0.5px solid var(--color-border-secondary)', borderRadius: '10px', background: 'var(--color-background-secondary)' }}>

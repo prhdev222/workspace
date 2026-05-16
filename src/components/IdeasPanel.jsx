@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createIdea, deleteIdea } from '../lib/api'
 
 const COLORS = {
@@ -66,9 +66,20 @@ function summarize(text) {
   return `${trimmed.slice(0, 84).trim()}...`
 }
 
-export default function IdeasPanel({ ideas, setIdeas, isMobile = false }) {
+export default function IdeasPanel({ ideas, setIdeas, isMobile = false, externalSearch = '' }) {
   const [text, setText] = useState('')
   const [color, setColor] = useState('teal')
+  const [search, setSearch] = useState(externalSearch)
+
+  useEffect(() => {
+    setSearch(externalSearch)
+  }, [externalSearch])
+
+  const filteredIdeas = ideas.filter(idea => {
+    const normalized = search.trim().toLowerCase()
+    if (!normalized) return true
+    return [idea.content, idea.color, idea.emoji].join(' ').toLowerCase().includes(normalized)
+  })
 
   async function add() {
     if (!text.trim()) return
@@ -93,6 +104,36 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false }) {
 
   return (
     <div style={{ padding: isMobile ? '14px 12px 20px' : '18px 22px 22px', overflowY: 'auto', flex: 1 }}>
+      <div style={{ position: 'relative', marginBottom: '16px' }}>
+        <i
+          className="ti ti-search"
+          style={{
+            position: 'absolute',
+            left: '11px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            fontSize: '12px',
+            color: 'var(--color-text-tertiary)'
+          }}
+        />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search ideas by text or color"
+          style={{
+            width: '100%',
+            padding: '9px 12px 9px 32px',
+            border: '0.5px solid var(--color-border-secondary)',
+            borderRadius: '10px',
+            fontSize: '12px',
+            fontFamily: 'inherit',
+            background: 'var(--color-background-primary)',
+            color: 'var(--color-text-primary)',
+            outline: 'none',
+            boxSizing: 'border-box'
+          }}
+        />
+      </div>
       <div
         style={{
           display: 'grid',
@@ -201,12 +242,12 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
             <div style={{ padding: '12px', borderRadius: '14px', background: 'var(--color-background-primary)' }}>
               <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '6px' }}>Total</div>
-              <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--color-text-primary)' }}>{ideas.length}</div>
+              <div style={{ fontSize: '24px', fontWeight: '600', color: 'var(--color-text-primary)' }}>{filteredIdeas.length}</div>
             </div>
             <div style={{ padding: '12px', borderRadius: '14px', background: 'var(--color-background-primary)' }}>
               <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: '6px' }}>Latest</div>
               <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-primary)', lineHeight: '1.5' }}>
-                {ideas[0] ? summarize(ideas[0].content) : 'No ideas yet'}
+                {filteredIdeas[0] ? summarize(filteredIdeas[0].content) : 'No ideas yet'}
               </div>
             </div>
             <div style={{ padding: '12px', borderRadius: '14px', background: 'var(--color-background-primary)' }}>
@@ -230,7 +271,7 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false }) {
         </div>
       </div>
 
-      {ideas.length === 0 ? (
+      {filteredIdeas.length === 0 ? (
         <div
           style={{
             textAlign: 'center',
@@ -246,7 +287,7 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false }) {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(240px, 1fr))', gap: '14px' }}>
-          {ideas.map(idea => {
+          {filteredIdeas.map(idea => {
             const palette = COLORS[idea.color] || COLORS.teal
             return (
               <article

@@ -17,19 +17,35 @@ const BLOCK_ICONS = {
   bullet:  'ti-point',
 }
 
-export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew, isMobile = false }) {
+function noteMatchesSearch(note, query) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+
+  return [
+    note.title,
+    ...(note.tags || []),
+    ...(note.blocks || []).map(block => block.content || block.text || '')
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(normalized)
+}
+
+export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew, isMobile = false, externalSearch = '' }) {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState([])
   const [blocks, setBlocks] = useState([])
   const [saving, setSaving] = useState(false)
   const [mobileTagFilter, setMobileTagFilter] = useState('all')
+  const [search, setSearch] = useState(externalSearch)
   const titleRef = useRef()
 
   const note = notes.find(n => n.id === currentId)
   const availableTags = [...new Set(notes.flatMap(n => n.tags || []))]
-  const visibleNotes = isMobile && mobileTagFilter !== 'all'
-    ? notes.filter(n => (n.tags || []).includes(mobileTagFilter))
-    : notes
+  const visibleNotes = notes.filter(n => {
+    const tagPass = !isMobile || mobileTagFilter === 'all' || (n.tags || []).includes(mobileTagFilter)
+    return tagPass && noteMatchesSearch(n, search)
+  })
 
   useEffect(() => {
     if (note) {
@@ -40,6 +56,10 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
       setTitle(''); setTags([]); setBlocks([])
     }
   }, [currentId])
+
+  useEffect(() => {
+    setSearch(externalSearch)
+  }, [externalSearch])
 
   useEffect(() => {
     if (!isMobile) return
@@ -105,6 +125,36 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
         display: 'flex', flexDirection: 'column', background: 'var(--color-background-secondary)'
       }}>
         <div style={{ padding: isMobile ? '8px' : '10px 8px' }}>
+          <div style={{ position: 'relative', marginBottom: '8px' }}>
+            <i
+              className="ti ti-search"
+              style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '12px',
+                color: 'var(--color-text-tertiary)'
+              }}
+            />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search notes"
+              style={{
+                width: '100%',
+                padding: '8px 10px 8px 30px',
+                border: '0.5px solid var(--color-border-secondary)',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontFamily: 'inherit',
+                background: 'var(--color-background-primary)',
+                color: 'var(--color-text-primary)',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
           {isMobile && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 2px 8px' }}>
@@ -180,7 +230,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
           padding: '0 8px 8px',
           display: isMobile ? 'none' : 'block'
         }}>
-          {notes.map(n => (
+          {visibleNotes.map(n => (
             <div key={n.id} onClick={() => onSelect(n.id)}
               style={{
                 padding: '8px',
@@ -208,6 +258,11 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
               </div>
             </div>
           ))}
+          {visibleNotes.length === 0 && (
+            <div style={{ padding: '10px 8px', fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
+              No notes match this search.
+            </div>
+          )}
         </div>
       </div>
 

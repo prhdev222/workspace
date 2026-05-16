@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createMindMap, deleteMindMap, getMindMaps, updateMindMap } from '../lib/api'
+import { createMindMap, deleteMindMap, updateMindMap } from '../lib/api'
 
 const BRANCH_COLORS = ['#1D9E75', '#378ADD', '#7F77DD', '#EF9F27', '#E24B4A', '#D4537E']
 const INITIAL_TEXT = ''
@@ -155,18 +155,30 @@ function layoutMindMap(map) {
   }
 }
 
-export default function MindMapPanel({ isMobile = false }) {
+function mindMapMatchesSearch(item, query) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return [item.title, item.content].join(' ').toLowerCase().includes(normalized)
+}
+
+export default function MindMapPanel({ isMobile = false, savedMaps = [], setSavedMaps, externalSearch = '', openMapId = null }) {
   const [draft, setDraft] = useState(INITIAL_TEXT)
   const [map, setMap] = useState(null)
   const [isExpanded, setIsExpanded] = useState(false)
-  const [savedMaps, setSavedMaps] = useState([])
   const [currentMapId, setCurrentMapId] = useState(null)
   const [mapTitle, setMapTitle] = useState('')
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState(externalSearch)
 
   useEffect(() => {
-    getMindMaps().then(setSavedMaps).catch(console.error)
-  }, [])
+    setSearch(externalSearch)
+  }, [externalSearch])
+
+  useEffect(() => {
+    if (!openMapId) return
+    const target = savedMaps.find(item => item.id === openMapId)
+    if (target) handleLoad(target)
+  }, [openMapId, savedMaps])
 
   function generate() {
     const parsed = parseMindMap(draft)
@@ -226,6 +238,7 @@ export default function MindMapPanel({ isMobile = false }) {
   const layout = map ? layoutMindMap(map) : null
   const showBuilder = !isMobile || !isExpanded
   const canvasPadding = isMobile ? '10px' : '20px 22px 24px'
+  const filteredSavedMaps = savedMaps.filter(item => mindMapMatchesSearch(item, search))
 
   return (
     <div style={{
@@ -395,13 +408,43 @@ export default function MindMapPanel({ isMobile = false }) {
           <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>
             Saved Maps
           </div>
-          {savedMaps.length === 0 ? (
+          <div style={{ position: 'relative', marginBottom: '10px' }}>
+            <i
+              className="ti ti-search"
+              style={{
+                position: 'absolute',
+                left: '11px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '12px',
+                color: 'var(--color-text-tertiary)'
+              }}
+            />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search saved maps"
+              style={{
+                width: '100%',
+                padding: '9px 12px 9px 32px',
+                border: '0.5px solid var(--color-border-secondary)',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontFamily: 'inherit',
+                background: 'var(--color-background-primary)',
+                color: 'var(--color-text-primary)',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+          {filteredSavedMaps.length === 0 ? (
             <div style={{ padding: '14px', borderRadius: '14px', background: 'var(--color-background-primary)', fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>
-              No saved maps yet. Generate and save one from the editor.
+              {savedMaps.length === 0 ? 'No saved maps yet. Generate and save one from the editor.' : 'No saved maps match this search.'}
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '10px', minWidth: 0 }}>
-              {savedMaps.map(saved => (
+              {filteredSavedMaps.map(saved => (
                 <div key={saved.id} style={{ padding: '12px', borderRadius: '14px', background: 'var(--color-background-primary)', border: saved.id === currentMapId ? '1px solid #1D9E75' : '0.5px solid var(--color-border-tertiary)', minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: '8px', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', minWidth: 0 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>

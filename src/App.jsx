@@ -5,7 +5,7 @@ import NotesPanel from './components/NotesPanel'
 import TodoPanel from './components/TodoPanel'
 import MindMapPanel from './components/MindMapPanel'
 import IdeasPanel from './components/IdeasPanel'
-import { getNotes, getTodos, getIdeas, createNote, logout } from './lib/api'
+import { getNotes, getTodos, getIdeas, getMindMaps, createNote, logout } from './lib/api'
 
 const VIEWS = [
   { id: 'notes',   label: 'Notes',    icon: 'ti-file-text' },
@@ -20,7 +20,10 @@ export default function App() {
   const [notes, setNotes] = useState([])
   const [todos, setTodos] = useState([])
   const [ideas, setIdeas] = useState([])
+  const [mindMaps, setMindMaps] = useState([])
   const [currentNoteId, setCurrentNoteId] = useState(null)
+  const [globalSearch, setGlobalSearch] = useState('')
+  const [openMindMapId, setOpenMindMapId] = useState(null)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 900)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'light')
@@ -46,6 +49,12 @@ export default function App() {
       })
     getIdeas()
       .then(setIdeas)
+      .catch(err => {
+        if (err?.status === 401) setAuthed(false)
+        else console.error(err)
+      })
+    getMindMaps()
+      .then(setMindMaps)
       .catch(err => {
         if (err?.status === 401) setAuthed(false)
         else console.error(err)
@@ -80,15 +89,15 @@ export default function App() {
     const data = await getNotes()
     setNotes(data)
     setCurrentNoteId(data[0]?.id || null)
-    const [td, id] = await Promise.all([getTodos(), getIdeas()])
-    setTodos(td); setIdeas(id)
+    const [td, id, mm] = await Promise.all([getTodos(), getIdeas(), getMindMaps()])
+    setTodos(td); setIdeas(id); setMindMaps(mm)
     setAuthed(true)
   }
 
   async function handleLogout() {
     await logout()
     setAuthed(false)
-    setNotes([]); setTodos([]); setIdeas([])
+    setNotes([]); setTodos([]); setIdeas([]); setMindMaps([])
   }
 
   async function handleNewNote() {
@@ -121,6 +130,63 @@ export default function App() {
   const noteDone = todos.filter(t => t.done).length
   const totalTodos = todos.length
   const currentView = VIEWS.find(v => v.id === view)
+  const normalizedSearch = globalSearch.trim().toLowerCase()
+
+  function noteSearchText(note) {
+    return [
+      note.title,
+      ...(note.tags || []),
+      ...(note.blocks || []).map(block => block.content || block.text || '')
+    ].join(' ').toLowerCase()
+  }
+
+  function todoSearchText(todo) {
+    return [todo.text, todo.priority, todo.due_label, todo.section].join(' ').toLowerCase()
+  }
+
+  function ideaSearchText(idea) {
+    return [idea.content, idea.color, idea.emoji].join(' ').toLowerCase()
+  }
+
+  function mindMapSearchText(item) {
+    return [item.title, item.content].join(' ').toLowerCase()
+  }
+
+  const globalResults = normalizedSearch
+    ? [
+        ...notes
+          .filter(note => noteSearchText(note).includes(normalizedSearch))
+          .slice(0, 4)
+          .map(note => ({ id: `note-${note.id}`, type: 'notes', title: note.title || 'Untitled note', subtitle: (note.tags || []).map(tag => `#${tag}`).join(' '), targetId: note.id })),
+        ...todos
+          .filter(todo => todoSearchText(todo).includes(normalizedSearch))
+          .slice(0, 4)
+          .map(todo => ({ id: `todo-${todo.id}`, type: 'todo', title: todo.text, subtitle: `${todo.section} · ${todo.due_label || 'No due date'}`, targetId: todo.id })),
+        ...ideas
+          .filter(idea => ideaSearchText(idea).includes(normalizedSearch))
+          .slice(0, 4)
+          .map(idea => ({ id: `idea-${idea.id}`, type: 'ideas', title: idea.content, subtitle: `${idea.emoji || '💡'} ${idea.color || 'idea'}`, targetId: idea.id })),
+        ...mindMaps
+          .filter(item => mindMapSearchText(item).includes(normalizedSearch))
+          .slice(0, 4)
+          .map(item => ({ id: `mindmap-${item.id}`, type: 'mindmap', title: item.title || 'Untitled map', subtitle: (item.content || '').split('\n')[0] || 'Saved mind map', targetId: item.id }))
+      ]
+    : []
+
+  function openSearchResult(result) {
+    setView(result.type)
+    setMobileMenuOpen(false)
+
+    if (result.type === 'notes') {
+      setCurrentNoteId(result.targetId)
+    }
+
+    if (result.type === 'mindmap') {
+      setOpenMindMapId(result.targetId)
+    } else {
+      setOpenMindMapId(null)
+    }
+  }
 
   function controlButtonStyle(isActive = false) {
     return {
@@ -206,6 +272,73 @@ export default function App() {
               {theme === 'dark' ? 'Dark' : 'Light'}
             </button>
           </div>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ position: 'relative' }}>
+              <i
+                className="ti ti-search"
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  fontSize: '13px',
+                  color: 'var(--color-text-tertiary)'
+                }}
+              />
+              <input
+                value={globalSearch}
+                onChange={e => setGlobalSearch(e.target.value)}
+                placeholder="Search all menus"
+                style={{
+                  width: '100%',
+                  padding: '9px 12px 9px 32px',
+                  borderRadius: '10px',
+                  border: '0.5px solid var(--color-border-secondary)',
+                  background: 'var(--color-background-primary)',
+                  color: 'var(--color-text-primary)',
+                  fontSize: '12px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  fontFamily: 'inherit'
+                }}
+              />
+            </div>
+            {normalizedSearch && (
+              <div style={{ marginTop: '8px', display: 'grid', gap: '6px', maxHeight: isMobile ? '180px' : '220px', overflowY: 'auto' }}>
+                {globalResults.length === 0 ? (
+                  <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'var(--color-background-primary)', fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                    No results in notes, todos, ideas, or mind maps.
+                  </div>
+                ) : (
+                  globalResults.map(result => (
+                    <button
+                      key={result.id}
+                      onClick={() => openSearchResult(result)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        border: '0.5px solid var(--color-border-tertiary)',
+                        background: 'var(--color-background-primary)',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                        <span style={{ fontSize: '10px', color: '#1D9E75', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{result.type}</span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {result.title}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {result.subtitle || 'Open result'}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Nav */}
@@ -274,11 +407,12 @@ export default function App() {
             onDeleted={handleNoteDeleted}
             onNew={handleNewNote}
             isMobile={isMobile}
+            externalSearch={globalSearch}
           />
         )}
-        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} />}
-        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} />}
-        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} />}
+        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} />}
+        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} />}
+        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} />}
       </div>
     </div>
   )
