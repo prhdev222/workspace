@@ -170,6 +170,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
   const [dropHint, setDropHint] = useState(null)
   const [mobileMoveTargetId, setMobileMoveTargetId] = useState('')
   const [mobileMovePlacement, setMobileMovePlacement] = useState('inside')
+  const [mobileMoveOpen, setMobileMoveOpen] = useState(false)
   const titleRef = useRef()
 
   const note = notes.find(n => n.id === currentId)
@@ -338,6 +339,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
 
     try {
       await moveNoteWithPlacement(currentId, targetNote, mobileMovePlacement)
+      setMobileMoveOpen(false)
     } catch (e) {
       alert(`Move failed: ${e.message}`)
     }
@@ -752,39 +754,14 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
               </div>
 
               <div style={{ marginBottom: '18px' }}>
-                <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-                  Parent Page
-                </div>
-                <select
-                  value={parentId}
-                  onChange={e => setParentId(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '9px 10px',
-                    border: '0.5px solid var(--color-border-secondary)',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    fontFamily: 'inherit',
-                    background: 'var(--color-background-primary)',
-                    color: 'var(--color-text-primary)',
-                    outline: 'none'
-                  }}
-                >
-                  <option value="">Top-level page</option>
-                  {parentOptions.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {`${'— '.repeat(item.depth)}${item.title || 'Untitled note'}`}
-                    </option>
-                  ))}
-                </select>
-                {isMobile && (
-                  <div style={{ marginTop: '10px', display: 'grid', gap: '8px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      Mobile Move Target
+                {!isMobile && (
+                  <>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+                      Parent Page
                     </div>
                     <select
-                      value={mobileMoveTargetId}
-                      onChange={e => setMobileMoveTargetId(e.target.value)}
+                      value={parentId}
+                      onChange={e => setParentId(e.target.value)}
                       style={{
                         width: '100%',
                         padding: '9px 10px',
@@ -797,58 +774,104 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
                         outline: 'none'
                       }}
                     >
-                      <option value="">Choose target page</option>
+                      <option value="">Top-level page</option>
                       {parentOptions.map(item => (
-                        <option key={`move-${item.id}`} value={item.id}>
+                        <option key={item.id} value={item.id}>
                           {`${'— '.repeat(item.depth)}${item.title || 'Untitled note'}`}
                         </option>
                       ))}
                     </select>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                      {['before', 'inside', 'after'].map(option => (
-                        <button
-                          key={option}
-                          onClick={() => setMobileMovePlacement(option)}
-                          style={{
-                            padding: '8px 6px',
-                            borderRadius: '10px',
-                            border: '0.5px solid var(--color-border-secondary)',
-                            background: mobileMovePlacement === option ? '#E1F5EE' : 'var(--color-background-secondary)',
-                            color: mobileMovePlacement === option ? '#085041' : 'var(--color-text-secondary)',
-                            fontSize: '11px',
-                            textTransform: 'capitalize',
-                            cursor: 'pointer',
-                            fontFamily: 'inherit'
-                          }}
-                        >
-                          {formatPlacementLabel(option)}
-                        </button>
-                      ))}
-                    </div>
+                  </>
+                )}
+                {isMobile && (
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <button
+                      onClick={() => setMobileMoveOpen(prev => !prev)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '12px',
+                        border: '0.5px solid var(--color-border-secondary)',
+                        background: 'var(--color-background-secondary)',
+                        color: 'var(--color-text-primary)',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <span style={{ fontWeight: '600' }}>Move Page</span>
+                      <i className={`ti ${mobileMoveOpen ? 'ti-chevron-up' : 'ti-chevron-down'}`} />
+                    </button>
                     <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: '1.5', padding: '8px 10px', borderRadius: '10px', background: 'var(--color-background-secondary)' }}>
                       {mobileMoveTargetId
                         ? `This page will move ${mobileMovePlacement} ${allTreeNotes.find(item => item.id === mobileMoveTargetId)?.title || 'target page'}.`
-                        : 'Choose a target page first, then pick before, inside, or after.'}
+                        : 'Open Move Page if you want to move this note.'}
                     </div>
-                    <button
-                      onClick={handleMobileMove}
-                      disabled={!mobileMoveTargetId}
-                      style={{
-                        padding: '9px 12px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: !mobileMoveTargetId ? '#B9C5C0' : '#173B33',
-                        color: 'white',
-                        fontSize: '12px',
-                        cursor: !mobileMoveTargetId ? 'not-allowed' : 'pointer',
-                        fontFamily: 'inherit'
-                      }}
-                    >
-                      Move current page
-                    </button>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', lineHeight: '1.5' }}>
-                      Mobile mode uses labeled move controls instead of browser drag, because touch drag-and-drop is inconsistent.
-                    </div>
+                    {mobileMoveOpen && (
+                      <div style={{ display: 'grid', gap: '8px' }}>
+                        <select
+                          value={mobileMoveTargetId}
+                          onChange={e => setMobileMoveTargetId(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '9px 10px',
+                            border: '0.5px solid var(--color-border-secondary)',
+                            borderRadius: '10px',
+                            fontSize: '12px',
+                            fontFamily: 'inherit',
+                            background: 'var(--color-background-primary)',
+                            color: 'var(--color-text-primary)',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="">Choose target page</option>
+                          {parentOptions.map(item => (
+                            <option key={`move-${item.id}`} value={item.id}>
+                              {`${'— '.repeat(item.depth)}${item.title || 'Untitled note'}`}
+                            </option>
+                          ))}
+                        </select>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                          {['before', 'inside', 'after'].map(option => (
+                            <button
+                              key={option}
+                              onClick={() => setMobileMovePlacement(option)}
+                              style={{
+                                padding: '8px 6px',
+                                borderRadius: '10px',
+                                border: '0.5px solid var(--color-border-secondary)',
+                                background: mobileMovePlacement === option ? '#E1F5EE' : 'var(--color-background-secondary)',
+                                color: mobileMovePlacement === option ? '#085041' : 'var(--color-text-secondary)',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                fontFamily: 'inherit'
+                              }}
+                            >
+                              {formatPlacementLabel(option)}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={handleMobileMove}
+                          disabled={!mobileMoveTargetId}
+                          style={{
+                            padding: '9px 12px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: !mobileMoveTargetId ? '#B9C5C0' : '#173B33',
+                            color: 'white',
+                            fontSize: '12px',
+                            cursor: !mobileMoveTargetId ? 'not-allowed' : 'pointer',
+                            fontFamily: 'inherit'
+                          }}
+                        >
+                          Move current page
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

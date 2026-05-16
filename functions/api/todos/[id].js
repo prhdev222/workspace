@@ -21,8 +21,15 @@ export async function onRequestPut({ params, request, env }) {
 
     if ('done' in body) { fields.push('done = ?'); values.push(body.done ? 1 : 0) }
     if ('text' in body) { fields.push('text = ?'); values.push(body.text) }
+    if ('item_type' in body) { fields.push('item_type = ?'); values.push(body.item_type || 'task') }
     if ('priority' in body) { fields.push('priority = ?'); values.push(body.priority) }
     if ('due_label' in body) { fields.push('due_label = ?'); values.push(body.due_label) }
+    if ('start_date' in body) { fields.push('start_date = ?'); values.push(body.start_date || null) }
+    if ('due_date' in body) { fields.push('due_date = ?'); values.push(body.due_date || null) }
+    if ('start_time' in body) { fields.push('start_time = ?'); values.push(body.start_time || null) }
+    if ('end_time' in body) { fields.push('end_time = ?'); values.push(body.end_time || null) }
+    if ('location' in body) { fields.push('location = ?'); values.push(body.location || '') }
+    if ('attachment_url' in body) { fields.push('attachment_url = ?'); values.push(body.attachment_url || '') }
     if ('section' in body) { fields.push('section = ?'); values.push(body.section) }
 
     if (!fields.length) return json({ error: 'No fields to update' }, 400)
