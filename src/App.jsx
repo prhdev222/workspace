@@ -100,21 +100,22 @@ export default function App() {
     setNotes([]); setTodos([]); setIdeas([]); setMindMaps([])
   }
 
-  async function handleNewNote() {
-    const note = await createNote({ title: 'Untitled note', tags: [], blocks: [] })
+  async function handleNewNote(parentId = null) {
+    const note = await createNote({ title: 'Untitled note', tags: [], blocks: [], parent_id: parentId })
     setNotes(prev => [note, ...prev])
     setCurrentNoteId(note.id)
     setView('notes')
   }
 
-  function handleNoteSaved(id, title, tags) {
-    setNotes(prev => prev.map(n => n.id === id ? { ...n, title, tags } : n))
+  function handleNoteSaved(id, updates) {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n))
   }
 
-  function handleNoteDeleted(id) {
-    const remaining = notes.filter(n => n.id !== id)
+  function handleNoteDeleted(ids) {
+    const removedIds = Array.isArray(ids) ? ids : [ids]
+    const remaining = notes.filter(n => !removedIds.includes(n.id))
     setNotes(remaining)
-    setCurrentNoteId(remaining[0]?.id || null)
+    setCurrentNoteId(prev => removedIds.includes(prev) ? (remaining[0]?.id || null) : prev)
   }
 
   if (authed === null) {

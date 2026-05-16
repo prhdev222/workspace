@@ -31,6 +31,126 @@ function noteMatchesSearch(note, query) {
     .includes(normalized)
 }
 
+function buildNoteTree(notes) {
+  const byParent = new Map()
+
+  notes.forEach(note => {
+    const key = note.parent_id || 'root'
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key).push(note)
+  })
+
+  byParent.forEach(children => {
+    children.sort((a, b) => {
+      const aOrder = Number.isFinite(a.sort_order) ? a.sort_order : a.created_at || 0
+      const bOrder = Number.isFinite(b.sort_order) ? b.sort_order : b.created_at || 0
+      return aOrder - bOrder
+    })
+  })
+
+  function visit(parentId = null, depth = 0) {
+    return (byParent.get(parentId || 'root') || []).flatMap(note => ([
+      { ...note, depth },
+      ...visit(note.id, depth + 1)
+    ]))
+  }
+
+  return visit()
+}
+
+function buildChildrenMap(notes) {
+  const byParent = new Map()
+
+  notes.forEach(note => {
+    const key = note.parent_id || 'root'
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key).push(note)
+  })
+
+  byParent.forEach(children => {
+    children.sort((a, b) => {
+      const aOrder = Number.isFinite(a.sort_order) ? a.sort_order : a.created_at || 0
+      const bOrder = Number.isFinite(b.sort_order) ? b.sort_order : b.created_at || 0
+      return aOrder - bOrder
+    })
+  })
+
+  return byParent
+}
+
+function buildBreadcrumb(note, allNotes) {
+  if (!note) return []
+  const byId = new Map(allNotes.map(item => [item.id, item]))
+  const chain = []
+  let current = note
+
+  while (current) {
+    chain.unshift(current)
+    current = current.parent_id ? byId.get(current.parent_id) : null
+  }
+
+  return chain
+}
+
+function getDescendantIdSet(rootId, notes) {
+  const childrenMap = buildChildrenMap(notes)
+  const ids = new Set([rootId])
+  const stack = [rootId]
+
+  while (stack.length) {
+    const currentId = stack.pop()
+    const children = childrenMap.get(currentId) || []
+    children.forEach(child => {
+      if (!ids.has(child.id)) {
+        ids.add(child.id)
+        stack.push(child.id)
+      }
+    })
+  }
+
+  return ids
+}
+
+function getSiblingNotes(notes, parentId, excludeId = null) {
+  return notes
+    .filter(note => (note.parent_id || null) === (parentId || null) && note.id !== excludeId)
+    .sort((a, b) => {
+      const aOrder = Number.isFinite(a.sort_order) ? a.sort_order : a.created_at || 0
+      const bOrder = Number.isFinite(b.sort_order) ? b.sort_order : b.created_at || 0
+      return aOrder - bOrder
+    })
+}
+
+function getDropPlacement(clientY, rect) {
+  const offset = clientY - rect.top
+  const third = rect.height / 3
+  if (offset < third) return 'before'
+  if (offset > third * 2) return 'after'
+  return 'inside'
+}
+
+function getNextSortOrder(notes, draggedId, target, placement) {
+  if (placement === 'inside') {
+    const siblings = getSiblingNotes(notes, target.id, draggedId)
+    const last = siblings[siblings.length - 1]
+    const base = Number.isFinite(last?.sort_order) ? last.sort_order : last?.created_at || 0
+    return { parentId: target.id, sortOrder: base + 1 }
+  }
+
+  const parentId = target.parent_id || null
+  const siblings = getSiblingNotes(notes, parentId, draggedId)
+  const targetIndex = siblings.findIndex(item => item.id === target.id)
+  const previous = placement === 'before' ? siblings[targetIndex - 1] : siblings[targetIndex]
+  const next = placement === 'before' ? siblings[targetIndex] : siblings[targetIndex + 1]
+  const previousOrder = previous ? (Number.isFinite(previous.sort_order) ? previous.sort_order : previous.created_at || 0) : null
+  const nextOrder = next ? (Number.isFinite(next.sort_order) ? next.sort_order : next.created_at || 0) : null
+
+  if (previousOrder !== null && nextOrder !== null) return { parentId, sortOrder: (previousOrder + nextOrder) / 2 }
+  if (previousOrder !== null) return { parentId, sortOrder: previousOrder + 1 }
+  if (nextOrder !== null) return { parentId, sortOrder: nextOrder - 1 }
+  return { parentId, sortOrder: Date.now() }
+}
+
 export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew, isMobile = false, externalSearch = '' }) {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState([])
@@ -38,24 +158,43 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
   const [saving, setSaving] = useState(false)
   const [mobileTagFilter, setMobileTagFilter] = useState('all')
   const [search, setSearch] = useState(externalSearch)
+  const [parentId, setParentId] = useState('')
+  const [collapsedIds, setCollapsedIds] = useState(() => new Set())
+  const [draggedId, setDraggedId] = useState(null)
+  const [dropHint, setDropHint] = useState(null)
+  const [mobileMoveTargetId, setMobileMoveTargetId] = useState('')
+  const [mobileMovePlacement, setMobileMovePlacement] = useState('inside')
   const titleRef = useRef()
 
   const note = notes.find(n => n.id === currentId)
   const availableTags = [...new Set(notes.flatMap(n => n.tags || []))]
-  const visibleNotes = notes.filter(n => {
+  const filteredNotes = notes.filter(n => {
     const tagPass = !isMobile || mobileTagFilter === 'all' || (n.tags || []).includes(mobileTagFilter)
     return tagPass && noteMatchesSearch(n, search)
   })
+  const visibleNotes = buildNoteTree(filteredNotes)
+  const allTreeNotes = buildNoteTree(notes)
+  const breadcrumb = buildBreadcrumb(note, notes)
+  const descendantIds = note ? getDescendantIdSet(note.id, notes) : new Set()
+  const parentOptions = allTreeNotes.filter(item => item.id !== currentId && !descendantIds.has(item.id))
+  const filteredChildrenMap = buildChildrenMap(filteredNotes)
+  const collapsibleIds = new Set(
+    filteredNotes
+      .filter(item => (filteredChildrenMap.get(item.id) || []).length > 0)
+      .map(item => item.id)
+  )
 
   useEffect(() => {
     if (note) {
       setTitle(note.title)
       setTags(note.tags || [])
       setBlocks((note.blocks || []).map(b => ({ ...b, text: b.content || b.text || '' })))
+      setParentId(note.parent_id || '')
+      setMobileMoveTargetId(note.parent_id || '')
     } else {
-      setTitle(''); setTags([]); setBlocks([])
+      setTitle(''); setTags([]); setBlocks([]); setParentId(''); setMobileMoveTargetId('')
     }
-  }, [currentId])
+  }, [currentId, note])
 
   useEffect(() => {
     setSearch(externalSearch)
@@ -68,6 +207,26 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
       onSelect(visibleNotes[0].id)
     }
   }, [isMobile, mobileTagFilter, currentId, visibleNotes, onSelect])
+
+  useEffect(() => {
+    if (!breadcrumb.length) return
+    const ancestorIds = new Set(breadcrumb.slice(0, -1).map(item => item.id))
+    if (!ancestorIds.size) return
+
+    setCollapsedIds(prev => {
+      const next = new Set(prev)
+      let changed = false
+
+      ancestorIds.forEach(id => {
+        if (next.has(id)) {
+          next.delete(id)
+          changed = true
+        }
+      })
+
+      return changed ? next : prev
+    })
+  }, [breadcrumb])
 
   function addBlock(type) {
     setBlocks(prev => [...prev, { id: crypto.randomUUID(), type, text: '', done: false }])
@@ -85,13 +244,24 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
     setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
   }
 
+  function toggleCollapsed(id) {
+    setCollapsedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   async function save() {
     if (!currentId) return
     setSaving(true)
     try {
+      const resolvedParentId = parentId || null
       await updateNote(currentId, {
         title: title || 'Untitled',
         tags,
+        parent_id: resolvedParentId,
         blocks: blocks.map((b, i) => ({
           id: b.id || crypto.randomUUID(),
           type: b.type,
@@ -100,7 +270,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
           position: i
         }))
       })
-      onSaved(currentId, title, tags)
+      onSaved(currentId, { title: title || 'Untitled', tags, parent_id: resolvedParentId, updated_at: Date.now() })
     } catch (e) {
       alert('Save failed: ' + e.message)
     } finally {
@@ -110,8 +280,189 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
 
   async function handleDelete() {
     if (!currentId || !confirm('Delete this note?')) return
-    await deleteNote(currentId)
-    onDeleted(currentId)
+    const result = await deleteNote(currentId)
+    onDeleted(result.deleted_ids || [currentId])
+  }
+
+  async function handleCreateSubpage() {
+    if (!currentId) return
+    await onNew(currentId)
+  }
+
+  function collapseAll() {
+    setCollapsedIds(new Set(collapsibleIds))
+  }
+
+  function expandAll() {
+    setCollapsedIds(new Set())
+  }
+
+  async function moveNoteWithPlacement(noteId, targetNote, placement) {
+    const draggedDescendants = getDescendantIdSet(noteId, notes)
+    if (placement === 'inside' && draggedDescendants.has(targetNote.id)) {
+      throw new Error('Cannot move a page inside its own subpage')
+    }
+
+    const { parentId: nextParentId, sortOrder } = getNextSortOrder(notes, noteId, targetNote, placement)
+    await updateNote(noteId, {
+      parent_id: nextParentId,
+      sort_order: sortOrder
+    })
+    onSaved(noteId, { parent_id: nextParentId, sort_order: sortOrder, updated_at: Date.now() })
+    if (noteId === currentId) setParentId(nextParentId || '')
+  }
+
+  async function handleDropOnNote(targetNote) {
+    if (!draggedId || draggedId === targetNote.id || !dropHint || dropHint.targetId !== targetNote.id) return
+
+    try {
+      await moveNoteWithPlacement(draggedId, targetNote, dropHint.placement)
+    } catch (e) {
+      alert(`Move failed: ${e.message}`)
+    } finally {
+      setDraggedId(null)
+      setDropHint(null)
+    }
+  }
+
+  async function handleMobileMove() {
+    if (!currentId || !mobileMoveTargetId) return
+    const targetNote = notes.find(item => item.id === mobileMoveTargetId)
+    if (!targetNote || targetNote.id === currentId) return
+
+    try {
+      await moveNoteWithPlacement(currentId, targetNote, mobileMovePlacement)
+    } catch (e) {
+      alert(`Move failed: ${e.message}`)
+    }
+  }
+
+  function getVisibleDesktopItems(items) {
+    const hiddenAncestorDepths = []
+
+    return items.filter(item => {
+      while (hiddenAncestorDepths.length && hiddenAncestorDepths[hiddenAncestorDepths.length - 1] >= item.depth) {
+        hiddenAncestorDepths.pop()
+      }
+
+      const isHidden = hiddenAncestorDepths.length > 0
+      if (collapsedIds.has(item.id)) hiddenAncestorDepths.push(item.depth)
+      return !isHidden
+    })
+  }
+
+  function renderDesktopTree(items) {
+    return getVisibleDesktopItems(items).map(n => (
+      <div key={n.id} style={{ marginBottom: '2px' }}>
+        <div
+          draggable
+          onDragStart={() => setDraggedId(n.id)}
+          onDragEnd={() => {
+            setDraggedId(null)
+            setDropHint(null)
+          }}
+          onDragOver={event => {
+            if (!draggedId || draggedId === n.id) return
+            const draggedDescendants = getDescendantIdSet(draggedId, notes)
+            const rect = event.currentTarget.getBoundingClientRect()
+            const placement = getDropPlacement(event.clientY, rect)
+            if (placement === 'inside' && draggedDescendants.has(n.id)) return
+            event.preventDefault()
+            setDropHint({ targetId: n.id, placement })
+          }}
+          onDrop={event => {
+            event.preventDefault()
+            handleDropOnNote(n)
+          }}
+          style={{
+            padding: '8px',
+            paddingLeft: `${8 + n.depth * 14}px`,
+            borderRadius: '8px',
+            cursor: 'pointer',
+            background: n.id === currentId ? '#E1F5EE' : 'transparent',
+            border: dropHint?.targetId === n.id ? '1px solid #9CCFB9' : '1px solid transparent',
+            borderTopColor: dropHint?.targetId === n.id && dropHint.placement === 'before' ? '#1D9E75' : undefined,
+            borderBottomColor: dropHint?.targetId === n.id && dropHint.placement === 'after' ? '#1D9E75' : undefined,
+            boxShadow: dropHint?.targetId === n.id && dropHint.placement === 'inside' ? 'inset 0 0 0 1px #1D9E75' : 'none',
+            opacity: draggedId === n.id ? 0.55 : 1
+          }}
+        >
+          <div style={{
+            fontSize: '12px',
+            fontWeight: n.id === currentId ? '600' : '500',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            color: n.id === currentId ? '#085041' : 'var(--color-text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            {dropHint?.targetId === n.id && (
+              <span style={{
+                fontSize: '9px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                color: '#1D9E75',
+                background: '#E1F5EE',
+                borderRadius: '999px',
+                padding: '2px 6px'
+              }}>
+                {dropHint.placement}
+              </span>
+            )}
+            <button
+              onClick={() => {
+                if ((filteredChildrenMap.get(n.id) || []).length > 0) toggleCollapsed(n.id)
+              }}
+              style={{
+                width: '16px',
+                height: '16px',
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                cursor: (filteredChildrenMap.get(n.id) || []).length > 0 ? 'pointer' : 'default',
+                color: 'var(--color-text-tertiary)',
+                fontSize: '11px',
+                flexShrink: 0
+              }}
+            >
+              {(filteredChildrenMap.get(n.id) || []).length > 0 ? (collapsedIds.has(n.id) ? '▸' : '▾') : (n.depth === 0 ? '•' : '↳')}
+            </button>
+            <button
+              onClick={() => onSelect(n.id)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                padding: 0,
+                margin: 0,
+                cursor: 'pointer',
+                font: 'inherit',
+                color: 'inherit',
+                minWidth: 0,
+                textAlign: 'left',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              {n.title}
+            </button>
+          </div>
+          <div style={{
+            fontSize: '10px',
+            color: 'var(--color-text-tertiary)',
+            marginTop: '3px',
+            marginLeft: '17px',
+            display: 'flex',
+            gap: '4px',
+            flexWrap: 'wrap'
+          }}>
+            {(n.tags || []).map(t => <span key={t} style={{ color: TAG_STYLES[t]?.color || '#888' }}>#{t}</span>)}
+          </div>
+        </div>
+      </div>
+    ))
   }
 
   return (
@@ -207,21 +558,69 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
                     <option value="">No notes</option>
                   ) : (
                     visibleNotes.map(n => (
-                      <option key={n.id} value={n.id}>{n.title || 'Untitled note'}</option>
+                      <option key={n.id} value={n.id}>{`${'— '.repeat(n.depth)}${n.title || 'Untitled note'}`}</option>
                     ))
                   )}
                 </select>
               </div>
             </>
           )}
-          <button onClick={onNew} style={{
-            width: '100%', padding: '7px 10px', background: '#1D9E75', color: 'white',
-            border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '500',
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-            fontFamily: 'inherit'
-          }}>
-            <i className="ti ti-plus" /> New note
-          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: currentId ? '1fr 1fr' : '1fr', gap: '8px' }}>
+            <button onClick={() => onNew()} style={{
+              width: '100%', padding: '7px 10px', background: '#1D9E75', color: 'white',
+              border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '500',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              fontFamily: 'inherit'
+            }}>
+              <i className="ti ti-plus" /> New page
+            </button>
+            {currentId && (
+              <button onClick={handleCreateSubpage} style={{
+                width: '100%', padding: '7px 10px', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)',
+                border: '0.5px solid var(--color-border-secondary)', borderRadius: '8px', fontSize: '12px', fontWeight: '500',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                fontFamily: 'inherit'
+              }}>
+                <i className="ti ti-indent-increase" /> Subpage
+              </button>
+            )}
+          </div>
+          {!isMobile && visibleNotes.length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <button
+                onClick={expandAll}
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  border: '0.5px solid var(--color-border-secondary)',
+                  borderRadius: '8px',
+                  background: 'var(--color-background-primary)',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit'
+                }}
+              >
+                Expand all
+              </button>
+              <button
+                onClick={collapseAll}
+                style={{
+                  flex: 1,
+                  padding: '6px 8px',
+                  border: '0.5px solid var(--color-border-secondary)',
+                  borderRadius: '8px',
+                  background: 'var(--color-background-primary)',
+                  color: 'var(--color-text-secondary)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit'
+                }}
+              >
+                Collapse all
+              </button>
+            </div>
+          )}
         </div>
         <div style={{
           flex: 1,
@@ -230,34 +629,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
           padding: '0 8px 8px',
           display: isMobile ? 'none' : 'block'
         }}>
-          {visibleNotes.map(n => (
-            <div key={n.id} onClick={() => onSelect(n.id)}
-              style={{
-                padding: '8px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                marginBottom: '2px',
-                background: n.id === currentId ? '#E1F5EE' : 'transparent',
-                border: 'none'
-              }}>
-              <div style={{
-                fontSize: '12px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden',
-                textOverflow: 'ellipsis', color: n.id === currentId ? '#085041' : 'var(--color-text-primary)'
-              }}>{n.title}</div>
-              <div style={{
-                fontSize: '10px',
-                color: 'var(--color-text-tertiary)',
-                marginTop: '3px',
-                display: 'flex',
-                gap: '4px',
-                flexWrap: 'wrap',
-                maxHeight: 'none',
-                overflow: 'visible'
-              }}>
-                {(n.tags || []).map(t => <span key={t} style={{ color: TAG_STYLES[t]?.color || '#888' }}>#{t}</span>)}
-              </div>
-            </div>
-          ))}
+          {renderDesktopTree(visibleNotes)}
           {visibleNotes.length === 0 && (
             <div style={{ padding: '10px 8px', fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
               No notes match this search.
@@ -302,6 +674,29 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
         <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 14px 22px' : '24px 32px' }}>
           {currentId ? (
             <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                {breadcrumb.map((item, index) => (
+                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button
+                      onClick={() => onSelect(item.id)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: 0,
+                        cursor: 'pointer',
+                        color: index === breadcrumb.length - 1 ? '#085041' : 'var(--color-text-tertiary)',
+                        fontSize: '11px',
+                        fontFamily: 'inherit',
+                        fontWeight: index === breadcrumb.length - 1 ? '600' : '500'
+                      }}
+                    >
+                      {item.title || 'Untitled'}
+                    </button>
+                    {index < breadcrumb.length - 1 && <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>/</span>}
+                  </div>
+                ))}
+              </div>
+
               <input
                 ref={titleRef}
                 value={title}
@@ -324,6 +719,102 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
                     border: `0.5px solid ${tags.includes(tag) ? s.color + '44' : 'var(--color-border-tertiary)'}`
                   }}>{s.label}</span>
                 ))}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
+                  {note?.parent_id ? 'Subpage in nested notes' : 'Top-level page'}
+                </div>
+                <button
+                  onClick={handleCreateSubpage}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '8px',
+                    border: '0.5px solid var(--color-border-secondary)',
+                    background: 'var(--color-background-secondary)',
+                    color: 'var(--color-text-primary)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <i className="ti ti-indent-increase" /> Add subpage
+                </button>
+              </div>
+
+              <div style={{ marginBottom: '18px' }}>
+                <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+                  Move Page
+                </div>
+                <select
+                  value={parentId}
+                  onChange={e => setParentId(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '9px 10px',
+                    border: '0.5px solid var(--color-border-secondary)',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontFamily: 'inherit',
+                    background: 'var(--color-background-primary)',
+                    color: 'var(--color-text-primary)',
+                    outline: 'none'
+                  }}
+                >
+                  <option value="">Top-level page</option>
+                  {parentOptions.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {`${'— '.repeat(item.depth)}${item.title || 'Untitled note'}`}
+                    </option>
+                  ))}
+                </select>
+                {isMobile && (
+                  <div style={{ marginTop: '10px', display: 'grid', gap: '8px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                      {['before', 'inside', 'after'].map(option => (
+                        <button
+                          key={option}
+                          onClick={() => setMobileMovePlacement(option)}
+                          style={{
+                            padding: '8px 6px',
+                            borderRadius: '10px',
+                            border: '0.5px solid var(--color-border-secondary)',
+                            background: mobileMovePlacement === option ? '#E1F5EE' : 'var(--color-background-secondary)',
+                            color: mobileMovePlacement === option ? '#085041' : 'var(--color-text-secondary)',
+                            fontSize: '11px',
+                            textTransform: 'capitalize',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit'
+                          }}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={handleMobileMove}
+                      disabled={!mobileMoveTargetId}
+                      style={{
+                        padding: '9px 12px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: !mobileMoveTargetId ? '#B9C5C0' : '#173B33',
+                        color: 'white',
+                        fontSize: '12px',
+                        cursor: !mobileMoveTargetId ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit'
+                      }}
+                    >
+                      Move current page
+                    </button>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', lineHeight: '1.5' }}>
+                      Mobile mode uses labeled move controls instead of browser drag, because touch drag-and-drop is inconsistent.
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Blocks */}

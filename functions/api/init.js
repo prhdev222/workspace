@@ -13,8 +13,11 @@ export async function onRequestGet({ env }) {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL DEFAULT 'Untitled',
         tags TEXT NOT NULL DEFAULT '[]',
+        parent_id TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY(parent_id) REFERENCES notes(id) ON DELETE SET NULL
       )`,
       `CREATE TABLE IF NOT EXISTS blocks (
         id TEXT PRIMARY KEY,
@@ -52,6 +55,18 @@ export async function onRequestGet({ env }) {
 
     for (const sql of statements) {
       await db.execute(sql)
+    }
+
+    const { rows: noteColumns } = await db.execute('PRAGMA table_info(notes)')
+    const noteColumnNames = new Set(noteColumns.map(column => column.name))
+
+    if (!noteColumnNames.has('parent_id')) {
+      await db.execute('ALTER TABLE notes ADD COLUMN parent_id TEXT')
+    }
+
+    if (!noteColumnNames.has('sort_order')) {
+      await db.execute('ALTER TABLE notes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0')
+      await db.execute('UPDATE notes SET sort_order = created_at WHERE sort_order = 0')
     }
 
     return json({ ok: true, message: 'Tables created successfully' })
