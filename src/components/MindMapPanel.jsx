@@ -228,7 +228,13 @@ export default function MindMapPanel({ isMobile = false }) {
   const canvasPadding = isMobile ? '10px' : '20px 22px 24px'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      flex: 1,
+      minHeight: 0,
+      overflow: isMobile && !isExpanded ? 'auto' : 'hidden'
+    }}>
       {showBuilder && (
         <div
           style={{
@@ -449,7 +455,13 @@ export default function MindMapPanel({ isMobile = false }) {
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: 'auto', padding: canvasPadding, background: isExpanded ? 'var(--color-background-secondary)' : 'var(--color-background-primary)' }}>
+      <div style={{
+        flex: isMobile && !isExpanded ? '0 0 auto' : 1,
+        minHeight: isMobile && !isExpanded ? '420px' : 0,
+        overflow: 'auto',
+        padding: canvasPadding,
+        background: isExpanded ? 'var(--color-background-secondary)' : 'var(--color-background-primary)'
+      }}>
         {isMobile && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
             <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>

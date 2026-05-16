@@ -264,7 +264,7 @@ export default function App() {
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', overflow: isMobile ? 'auto' : 'hidden', minHeight: 0 }}>
         {view === 'notes' && (
           <NotesPanel
             notes={notes}

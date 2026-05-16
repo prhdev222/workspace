@@ -22,9 +22,14 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
   const [tags, setTags] = useState([])
   const [blocks, setBlocks] = useState([])
   const [saving, setSaving] = useState(false)
+  const [mobileTagFilter, setMobileTagFilter] = useState('all')
   const titleRef = useRef()
 
   const note = notes.find(n => n.id === currentId)
+  const availableTags = [...new Set(notes.flatMap(n => n.tags || []))]
+  const visibleNotes = isMobile && mobileTagFilter !== 'all'
+    ? notes.filter(n => (n.tags || []).includes(mobileTagFilter))
+    : notes
 
   useEffect(() => {
     if (note) {
@@ -35,6 +40,14 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
       setTitle(''); setTags([]); setBlocks([])
     }
   }, [currentId])
+
+  useEffect(() => {
+    if (!isMobile) return
+    if (!visibleNotes.length) return
+    if (!visibleNotes.some(n => n.id === currentId)) {
+      onSelect(visibleNotes[0].id)
+    }
+  }, [isMobile, mobileTagFilter, currentId, visibleNotes, onSelect])
 
   function addBlock(type) {
     setBlocks(prev => [...prev, { id: crypto.randomUUID(), type, text: '', done: false }])
@@ -86,12 +99,71 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
       {/* Sidebar note list */}
       <div style={{
         width: isMobile ? '100%' : '220px',
-        maxHeight: isMobile ? '160px' : 'none',
+        maxHeight: isMobile ? '154px' : 'none',
         borderRight: isMobile ? 'none' : '0.5px solid var(--color-border-tertiary)',
         borderBottom: isMobile ? '0.5px solid var(--color-border-tertiary)' : 'none',
         display: 'flex', flexDirection: 'column', background: 'var(--color-background-secondary)'
       }}>
-        <div style={{ padding: '10px 8px' }}>
+        <div style={{ padding: isMobile ? '8px' : '10px 8px' }}>
+          {isMobile && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 2px 8px' }}>
+                <div style={{ fontSize: '10px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Notes ({visibleNotes.length})
+                </div>
+                <div style={{ marginLeft: 'auto', fontSize: '10px', color: 'var(--color-text-tertiary)' }}>
+                  Mobile picker
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: availableTags.length ? '110px 1fr' : '1fr', gap: '8px', marginBottom: '8px' }}>
+                {availableTags.length > 0 && (
+                  <select
+                    value={mobileTagFilter}
+                    onChange={e => setMobileTagFilter(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      border: '0.5px solid var(--color-border-secondary)',
+                      borderRadius: '10px',
+                      fontSize: '12px',
+                      fontFamily: 'inherit',
+                      background: 'var(--color-background-primary)',
+                      color: 'var(--color-text-primary)',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="all">All tags</option>
+                    {availableTags.map(tag => (
+                      <option key={tag} value={tag}>{tag}</option>
+                    ))}
+                  </select>
+                )}
+                <select
+                  value={currentId || ''}
+                  onChange={e => onSelect(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    border: '0.5px solid var(--color-border-secondary)',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontFamily: 'inherit',
+                    background: 'var(--color-background-primary)',
+                    color: 'var(--color-text-primary)',
+                    outline: 'none'
+                  }}
+                >
+                  {visibleNotes.length === 0 ? (
+                    <option value="">No notes</option>
+                  ) : (
+                    visibleNotes.map(n => (
+                      <option key={n.id} value={n.id}>{n.title || 'Untitled note'}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+            </>
+          )}
           <button onClick={onNew} style={{
             width: '100%', padding: '7px 10px', background: '#1D9E75', color: 'white',
             border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '500',
@@ -104,22 +176,34 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
         <div style={{
           flex: 1,
           overflowY: isMobile ? 'hidden' : 'auto',
-          overflowX: isMobile ? 'auto' : 'hidden',
+          overflowX: 'hidden',
           padding: '0 8px 8px',
-          display: isMobile ? 'flex' : 'block',
-          gap: isMobile ? '8px' : '0'
+          display: isMobile ? 'none' : 'block'
         }}>
           {notes.map(n => (
             <div key={n.id} onClick={() => onSelect(n.id)}
               style={{
-                padding: '8px', borderRadius: '8px', cursor: 'pointer', marginBottom: isMobile ? '0' : '2px',
-                background: n.id === currentId ? '#E1F5EE' : 'transparent'
+                padding: '8px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                marginBottom: '2px',
+                background: n.id === currentId ? '#E1F5EE' : 'transparent',
+                border: 'none'
               }}>
               <div style={{
                 fontSize: '12px', fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden',
                 textOverflow: 'ellipsis', color: n.id === currentId ? '#085041' : 'var(--color-text-primary)'
               }}>{n.title}</div>
-              <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', marginTop: '2px', display: 'flex', gap: '4px' }}>
+              <div style={{
+                fontSize: '10px',
+                color: 'var(--color-text-tertiary)',
+                marginTop: '3px',
+                display: 'flex',
+                gap: '4px',
+                flexWrap: 'wrap',
+                maxHeight: 'none',
+                overflow: 'visible'
+              }}>
                 {(n.tags || []).map(t => <span key={t} style={{ color: TAG_STYLES[t]?.color || '#888' }}>#{t}</span>)}
               </div>
             </div>
