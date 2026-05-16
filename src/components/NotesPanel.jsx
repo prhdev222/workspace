@@ -151,6 +151,12 @@ function getNextSortOrder(notes, draggedId, target, placement) {
   return { parentId, sortOrder: Date.now() }
 }
 
+function formatPlacementLabel(placement) {
+  if (placement === 'before') return 'Before target'
+  if (placement === 'after') return 'After target'
+  return 'Inside target'
+}
+
 export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDeleted, onNew, isMobile = false, externalSearch = '' }) {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState([])
@@ -747,7 +753,7 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
 
               <div style={{ marginBottom: '18px' }}>
                 <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-                  Move Page
+                  Parent Page
                 </div>
                 <select
                   value={parentId}
@@ -773,6 +779,31 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
                 </select>
                 {isMobile && (
                   <div style={{ marginTop: '10px', display: 'grid', gap: '8px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Mobile Move Target
+                    </div>
+                    <select
+                      value={mobileMoveTargetId}
+                      onChange={e => setMobileMoveTargetId(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '9px 10px',
+                        border: '0.5px solid var(--color-border-secondary)',
+                        borderRadius: '10px',
+                        fontSize: '12px',
+                        fontFamily: 'inherit',
+                        background: 'var(--color-background-primary)',
+                        color: 'var(--color-text-primary)',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="">Choose target page</option>
+                      {parentOptions.map(item => (
+                        <option key={`move-${item.id}`} value={item.id}>
+                          {`${'— '.repeat(item.depth)}${item.title || 'Untitled note'}`}
+                        </option>
+                      ))}
+                    </select>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                       {['before', 'inside', 'after'].map(option => (
                         <button
@@ -790,9 +821,14 @@ export default function NotesPanel({ notes, currentId, onSelect, onSaved, onDele
                             fontFamily: 'inherit'
                           }}
                         >
-                          {option}
+                          {formatPlacementLabel(option)}
                         </button>
                       ))}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', lineHeight: '1.5', padding: '8px 10px', borderRadius: '10px', background: 'var(--color-background-secondary)' }}>
+                      {mobileMoveTargetId
+                        ? `This page will move ${mobileMovePlacement} ${allTreeNotes.find(item => item.id === mobileMoveTargetId)?.title || 'target page'}.`
+                        : 'Choose a target page first, then pick before, inside, or after.'}
                     </div>
                     <button
                       onClick={handleMobileMove}
