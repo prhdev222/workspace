@@ -71,10 +71,17 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
   const [pulse, setPulse]     = useState(false)
-  const [interimText, setInterimText] = useState('') // live speech preview
+  const [interimText, setInterimText] = useState('')
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 900)
   const inputRef  = useRef()
   const bottomRef = useRef()
   const textareaRef = useRef()
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 900)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // ── speech ───────────────────────────────────────────────────────────────────
   const { supported: micSupported, listening, start: startMic, stop: stopMic } = useSpeechRecognition({
@@ -186,7 +193,10 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
         onClick={() => setOpen(o => !o)}
         aria-label="AI Assistant"
         style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 9980,
+          position: 'fixed',
+          bottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 16px)' : 24,
+          right: isMobile ? 16 : 24,
+          zIndex: 9980,
           width: 52, height: 52, borderRadius: '50%', border: 'none',
           background: open ? '#173B33' : '#1D9E75',
           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -212,7 +222,18 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
 
       {/* ── chat panel ── */}
       {open && (
-        <div style={{
+        <div style={isMobile ? {
+          position: 'fixed',
+          left: 8, right: 8,
+          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 76px)',
+          top: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+          zIndex: 9979,
+          background: 'var(--color-background-primary)',
+          border: '0.5px solid var(--color-border-secondary)',
+          borderRadius: '20px',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.22)',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        } : {
           position: 'fixed', bottom: 88, right: 24, zIndex: 9979,
           width: 'min(390px, calc(100vw - 32px))',
           maxHeight: 'min(560px, calc(100vh - 110px))',
@@ -384,10 +405,12 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
             </button>
           </div>
 
-          {/* footer hint */}
-          <div style={{ padding: '5px 14px 10px', fontSize: '10px', color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
-            Enter ส่ง · Shift+Enter ขึ้นบรรทัด{micSupported ? ' · 🎙️ พูดไทย/EN ได้' : ''}
-          </div>
+          {/* footer hint — desktop only */}
+          {!isMobile && (
+            <div style={{ padding: '5px 14px 10px', fontSize: '10px', color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
+              Enter ส่ง · Shift+Enter ขึ้นบรรทัด{micSupported ? ' · 🎙️ พูดไทย/EN ได้' : ''}
+            </div>
+          )}
         </div>
       )}
     </>
