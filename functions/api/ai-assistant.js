@@ -5,11 +5,12 @@
 
 import { getDb } from './_db.js'
 
-const SYSTEM_PROMPT = `You are an AI assistant embedded in a personal workspace app (Notes, To-Do, Calendar).
+const SYSTEM_PROMPT = `You are an AI assistant embedded in a personal workspace app (Notes, To-Do, Calendar, Health Log).
 The user speaks Thai and/or English. Your job is to understand their message and extract structured data to create one of:
   1. "note"        — a note with title and content blocks
   2. "todo"        — a task with priority and due date
   3. "appointment" — a calendar event with date, time range, location
+  4. "health"      — a health log entry (period start/end, vaccination, symptom, medication, etc.)
 
 TODAY is: {{TODAY}}
 
@@ -17,8 +18,8 @@ Respond ONLY with valid JSON — no markdown, no backticks, no explanation outsi
 
 JSON schema:
 {
-  "type": "note" | "todo" | "appointment" | "clarify",
-  "summary": "<Thai/EN short confirmation sentence, e.g. 'สร้างนัดตรวจเลือดวันพรุ่งนี้ 10:00 ที่ lab แล้วค่ะ'>",
+  "type": "note" | "todo" | "appointment" | "health" | "clarify",
+  "summary": "<Thai/EN short confirmation sentence>",
   "data": {
     // For type=note:
     "title": "string",
@@ -40,10 +41,22 @@ JSON schema:
     "priority": "med",
     "section": "upcoming",
 
+    // For type=health:
+    "text": "string (emoji + label, e.g. '🩸 Period Start')",
+    "due_date": "YYYY-MM-DD (default today)",
+    "note": "string or null (optional detail, e.g. vaccine name, symptom detail)",
+
     // For type=clarify:
     "question": "string (ask user what's missing)"
   }
 }
+
+Health keyword mapping (detect these in Thai and English):
+- "ประจำเดือนมา" | "รอบเดือนมา" | "period start" | "mens" | "menstruation start" | "เริ่มประจำเดือน" → text: "🩸 Period Start"
+- "ประจำเดือนหยุด" | "รอบเดือนหยุด" | "period end" | "period stop" | "หมดประจำเดือน" → text: "🔴 Period End"
+- "ฉีดวัคซีน" | "วัคซีน" | "vaccination" | "vaccine" | "vaccinated" → text: "💉 Vaccination" (append vaccine name to note if mentioned)
+- "ปวดหัว" | "ไม่สบาย" | "not feeling well" | "sick" → text: "🤒 Not feeling well"
+- "กินยา" | "ทานยา" | "medication" | "took medicine" → text: "💊 Medication"
 
 Examples:
 User: "นัดตรวจเลือด พรุ่งนี้ 10 โมง ที่ lab"
@@ -54,6 +67,15 @@ User: "todo ส่ง case report ภายในวันศุกร์ priori
 
 User: "note BCR-ABL monitoring: ตรวจ PCR ทุก 3 เดือน หลังได้ imatinib"
 → { "type": "note", "summary": "สร้าง note: BCR-ABL monitoring แล้วค่ะ", "data": { "title": "BCR-ABL monitoring", "content": "ตรวจ PCR ทุก 3 เดือน หลังได้ imatinib", "tags": ["clinical"] } }
+
+User: "ประจำเดือนมาวันนี้"
+→ { "type": "health", "summary": "บันทึก 🩸 Period Start วันนี้แล้วค่ะ", "data": { "text": "🩸 Period Start", "due_date": "{{TODAY}}", "note": null } }
+
+User: "period stop"
+→ { "type": "health", "summary": "บันทึก 🔴 Period End วันนี้แล้วค่ะ", "data": { "text": "🔴 Period End", "due_date": "{{TODAY}}", "note": null } }
+
+User: "ฉีดวัคซีน COVID วันนี้"
+→ { "type": "health", "summary": "บันทึก 💉 Vaccination (COVID) วันนี้แล้วค่ะ", "data": { "text": "💉 Vaccination", "due_date": "{{TODAY}}", "note": "COVID" } }
 
 If unclear, use type=clarify and ask a short question.`
 
@@ -205,6 +227,29 @@ export async function onRequestPost({ request, env }) {
         start_time: startTime, end_time: endTime,
         location, attachment_url: '', due_label: dueLabel,
         section, created_at: String(now)
+      }
+    }
+
+    else if (type === 'health') {
+      const text = d.text || '🩸 Health Log'
+      const dueDate = d.due_date || getTodayStrings().today
+      const note = d.note ? ` — ${d.note}` : ''
+      const fullText = note ? `${text}${note}` : text
+
+      await db.execute(
+        `INSERT INTO todos
+          (id, text, done, item_type, priority, start_date, due_date, start_time, end_time,
+           location, attachment_url, due_label, section, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, fullText, 0, 'health', 'med', dueDate, dueDate, null, null,
+         '', '', dueDate, 'today', now]
+      )
+      result = {
+        id, text: fullText, done: false, item_type: 'health', priority: 'med',
+        start_date: dueDate, due_date: dueDate,
+        start_time: null, end_time: null,
+        location: '', attachment_url: '', due_label: dueDate,
+        section: 'today', created_at: String(now)
       }
     }
 

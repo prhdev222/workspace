@@ -7,15 +7,18 @@ const EXAMPLES = [
   'นัดตรวจเลือด พรุ่งนี้ 10 โมง ที่ lab',
   'note BCR-ABL monitoring: ตรวจ PCR ทุก 3 เดือน',
   'todo ส่ง case report ภายในวันศุกร์ priority สูง',
-  'appointment grand round จันทร์หน้า 8.00-10.00 ห้องประชุม',
+  'ประจำเดือนมาวันนี้',
+  'period stop',
+  'ฉีดวัคซีน COVID วันนี้',
 ]
 
 const TYPE_META = {
-  note:        { bg: '#EEEDFE', color: '#534AB7', icon: 'ti-file-text',      label: 'Note' },
-  todo:        { bg: '#FAEEDA', color: '#854F0B', icon: 'ti-checklist',      label: 'To-do' },
-  appointment: { bg: '#E1F5EE', color: '#085041', icon: 'ti-calendar-event', label: 'Appointment' },
-  clarify:     { bg: '#E6F1FB', color: '#185FA5', icon: 'ti-help-circle',    label: 'ต้องการข้อมูลเพิ่ม' },
-  error:       { bg: '#FCEBEB', color: '#A32D2D', icon: 'ti-alert-circle',   label: 'Error' },
+  note:        { bg: '#EEEDFE', color: '#534AB7', icon: 'ti-file-text',           label: 'Note' },
+  todo:        { bg: '#FAEEDA', color: '#854F0B', icon: 'ti-checklist',           label: 'To-do' },
+  appointment: { bg: '#E1F5EE', color: '#085041', icon: 'ti-calendar-event',      label: 'Appointment' },
+  health:      { bg: '#FDEEF4', color: '#8B2252', icon: 'ti-heart-rate-monitor',  label: 'Health Log' },
+  clarify:     { bg: '#E6F1FB', color: '#185FA5', icon: 'ti-help-circle',         label: 'ต้องการข้อมูลเพิ่ม' },
+  error:       { bg: '#FCEBEB', color: '#A32D2D', icon: 'ti-alert-circle',        label: 'Error' },
 }
 
 // ─── useSpeechRecognition hook ────────────────────────────────────────────────
@@ -160,7 +163,7 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
         setView?.('notes')
         onNoteCreated?.(data.result)
       }
-      if ((data.type === 'todo' || data.type === 'appointment') && data.result) {
+      if ((data.type === 'todo' || data.type === 'appointment' || data.type === 'health') && data.result) {
         setTodos?.(prev => [data.result, ...prev])
         setView?.('todo')
         onTodoCreated?.(data.result)
@@ -253,7 +256,7 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '13px', fontWeight: '600', color: 'white' }}>AI Assistant</div>
                 <div style={{ fontSize: '11px', color: 'rgba(255,255,255,.72)' }}>
-                  พิมพ์ หรือ กด 🎙️ พูดได้เลย · Note · Todo · นัด
+                  พิมพ์ หรือ กด 🎙️ พูดได้เลย · Note · Todo · นัด · 🩸 Health
                 </div>
               </div>
               <button onClick={() => setMessages([])} title="ล้าง chat"
