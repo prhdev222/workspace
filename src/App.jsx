@@ -5,6 +5,7 @@ import NotesPanel from './components/NotesPanel'
 import TodoPanel from './components/TodoPanel'
 import MindMapPanel from './components/MindMapPanel'
 import IdeasPanel from './components/IdeasPanel'
+import AIAssistant from './components/AIAssistant'
 import { getNotes, getTodos, getIdeas, getMindMaps, getLinks, createNote, logout } from './lib/api'
 
 const VIEWS = [
@@ -421,6 +422,14 @@ export default function App() {
           </button>
         </div>
       </div>
+
+      <AIAssistant
+        setNotes={setNotes}
+        setTodos={setTodos}
+        setView={setView}
+        onNoteCreated={note => setCurrentNoteId(note.id)}
+        onTodoCreated={() => {}}
+      />
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: isMobile ? 'auto' : 'hidden', minHeight: 0 }}>
