@@ -428,7 +428,7 @@ export default function App() {
         setTodos={setTodos}
         setView={setView}
         onNoteCreated={note => setCurrentNoteId(note.id)}
-        onTodoCreated={() => {}}
+        onTodoCreated={() => getTodos().then(setTodos).catch(console.error)}
       />
 
       {/* Main content */}

@@ -314,7 +314,7 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
               )
 
               const meta = TYPE_META[msg.type] || TYPE_META.error
-              const created = msg.type && !['error','clarify'].includes(msg.type)
+              const created = msg.result && !['error','clarify'].includes(msg.type)
               return (
                 <div key={i} style={{ display: 'flex', justifyContent: 'flex-start' }}>
                   <div style={{ maxWidth: '88%', padding: '10px 13px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: '4px 14px 14px 14px', fontSize: '13px', lineHeight: 1.55 }}>
