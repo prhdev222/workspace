@@ -11,8 +11,16 @@ const PRIO = {
 
 const TYPE_STYLES = {
   task: { bg: '#EEF3F8', color: '#45607A', label: 'Task', icon: 'ti-checklist' },
-  appointment: { bg: '#EAF5F1', color: '#0C5A47', label: 'Appointment', icon: 'ti-calendar-event' }
+  appointment: { bg: '#EAF5F1', color: '#0C5A47', label: 'Appointment', icon: 'ti-calendar-event' },
+  health: { bg: '#FDEEF4', color: '#8B2252', label: 'Health', icon: 'ti-heart-rate-monitor' }
 }
+
+const HEALTH_QUICK_LOGS = [
+  { emoji: '🩸', label: 'Period Start', note: '' },
+  { emoji: '🔴', label: 'Period End', note: '' },
+  { emoji: '💊', label: 'Medication', note: '' },
+  { emoji: '🤒', label: 'Not feeling well', note: '' },
+]
 
 function todoMatchesSearch(todo, query) {
   const normalized = query.trim().toLowerCase()
@@ -116,8 +124,9 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
     const iso = toIsoDate(date)
     const items = filteredTodos.filter(todo => getPrimaryDate(todo) === iso)
     const hasAppointment = items.some(todo => todo.item_type === 'appointment')
-    const hasTask = items.some(todo => todo.item_type !== 'appointment')
-    return { iso, day: date.getDate(), inMonth: date.getMonth() === calendarBase.getMonth(), items, hasAppointment, hasTask }
+    const hasHealth = items.some(todo => todo.item_type === 'health')
+    const hasTask = items.some(todo => todo.item_type !== 'appointment' && todo.item_type !== 'health')
+    return { iso, day: date.getDate(), inMonth: date.getMonth() === calendarBase.getMonth(), items, hasAppointment, hasHealth, hasTask }
   })
 
   useEffect(() => {
@@ -155,6 +164,21 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
       setNewText('')
       setNewLocation('')
       setNewAttachmentUrl('')
+    } catch (e) { alert(e.message) }
+  }
+
+  async function quickLog({ emoji, label }) {
+    try {
+      const created = await createTodo({
+        text: `${emoji} ${label}`,
+        item_type: 'health',
+        priority: 'med',
+        start_date: todayIso,
+        due_date: todayIso,
+        due_label: todayIso,
+        section: 'today'
+      })
+      setTodos(prev => [created, ...prev])
     } catch (e) { alert(e.message) }
   }
 
@@ -463,9 +487,9 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
                   >
                     <div style={{ fontSize: '11px', fontWeight: isSelected ? '700' : '500' }}>{day.day}</div>
                     <div style={{ fontSize: '11px', marginTop: '4px', lineHeight: 1 }}>
-                      {day.hasAppointment && day.hasTask ? '✨' : day.hasAppointment ? '📅' : day.hasTask ? '✅' : ''}
+                      {day.hasHealth ? '🩸' : day.hasAppointment && day.hasTask ? '✨' : day.hasAppointment ? '📅' : day.hasTask ? '✅' : ''}
                     </div>
-                    {(day.hasAppointment || day.hasTask) && (
+                    {(day.hasAppointment || day.hasTask || day.hasHealth) && (
                       <span style={{
                         position: 'absolute',
                         right: '6px',
@@ -473,7 +497,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
                         width: '7px',
                         height: '7px',
                         borderRadius: '50%',
-                        background: day.hasAppointment ? '#1D9E75' : '#D39B3C'
+                        background: day.hasHealth ? '#C0507A' : day.hasAppointment ? '#1D9E75' : '#D39B3C'
                       }} />
                     )}
                   </button>
@@ -563,6 +587,42 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
           No tasks match this search.
         </div>
       )}
+
+      {/* Quick Health Log */}
+      <div style={{ marginTop: '16px', marginBottom: '12px', padding: '14px', border: '0.5px solid #F0C8DA', borderRadius: '10px', background: 'linear-gradient(135deg, #FEF6F9 0%, #FDF0F5 100%)' }}>
+        <div style={{ fontSize: '11px', fontWeight: '600', color: '#8B2252', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <i className="ti ti-heart-rate-monitor" style={{ fontSize: '13px' }} />
+          Quick Health Log
+        </div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {HEALTH_QUICK_LOGS.map(item => (
+            <button
+              key={item.label}
+              onClick={() => quickLog(item)}
+              style={{
+                padding: '8px 14px',
+                borderRadius: '999px',
+                border: '0.5px solid #F0C8DA',
+                background: 'white',
+                color: '#8B2252',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'box-shadow 0.15s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 12px rgba(139,34,82,0.15)'}
+              onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+            >
+              <span style={{ fontSize: '14px' }}>{item.emoji}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Add new */}
       <div style={{ marginTop: '16px', padding: '14px', border: '0.5px solid var(--color-border-secondary)', borderRadius: '10px', background: 'var(--color-background-secondary)' }}>
