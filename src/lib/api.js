@@ -60,3 +60,8 @@ export const deleteLink = (id) => req('DELETE', `/links/${id}`)
 
 // Init DB tables (run once)
 export const initDb = () => req('GET', '/init')
+
+// Obsidian sync
+export const syncToObsidian    = (id) => req('POST',   `/obsidian/${id}`)
+export const pullFromObsidian  = (id) => req('GET',    `/obsidian/${id}`)
+export const unsyncFromObsidian = (id) => req('DELETE', `/obsidian/${id}`)

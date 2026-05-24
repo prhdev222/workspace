@@ -7,7 +7,13 @@ pages_build_output_dir = "dist"
 # These are non-secret defaults; override real secrets in CF dashboard
 APP_ENV = "production"
 
+[vars]
+# Non-secret config
+GITHUB_OWNER = "prhdev222"
+GITHUB_REPO  = "obsidian_workspace"
+
 # Add in Cloudflare Dashboard → Settings → Environment Variables (encrypted):
 # TURSO_URL      = "libsql://your-db-name.turso.io"
 # TURSO_TOKEN    = "your-turso-auth-token"
 # SESSION_SECRET = "a-long-random-string-min-32-chars"
+# GITHUB_TOKEN   = "your-github-personal-access-token"

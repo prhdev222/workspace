@@ -85,6 +85,20 @@ export async function onRequestGet({ env }) {
       await db.execute('UPDATE notes SET sort_order = created_at WHERE sort_order = 0')
     }
 
+    // Obsidian sync columns (Migration 4)
+    if (!noteColumnNames.has('obsidian_synced')) {
+      await db.execute('ALTER TABLE notes ADD COLUMN obsidian_synced INTEGER NOT NULL DEFAULT 0')
+    }
+    if (!noteColumnNames.has('obsidian_path')) {
+      await db.execute('ALTER TABLE notes ADD COLUMN obsidian_path TEXT')
+    }
+    if (!noteColumnNames.has('obsidian_sha')) {
+      await db.execute('ALTER TABLE notes ADD COLUMN obsidian_sha TEXT')
+    }
+    if (!noteColumnNames.has('obsidian_synced_at')) {
+      await db.execute('ALTER TABLE notes ADD COLUMN obsidian_synced_at INTEGER')
+    }
+
     const { rows: todoColumns } = await db.execute('PRAGMA table_info(todos)')
     const todoColumnNames = new Set(todoColumns.map(column => column.name))
 

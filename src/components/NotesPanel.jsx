@@ -1,7 +1,7 @@
 // src/components/NotesPanel.jsx
 // v2: slash commands · drag-to-reorder · rich formatting · keyboard shortcuts · mobile-optimised
 import { useState, useEffect, useRef } from 'react'
-import { updateNote, deleteNote } from '../lib/api'
+import { updateNote, deleteNote, syncToObsidian, pullFromObsidian, unsyncFromObsidian } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -704,6 +704,7 @@ export default function NotesPanel({
   const [tags, setTags] = useState([])
   const [blocks, setBlocks] = useState([])
   const [saving, setSaving] = useState(false)
+  const [obsidianSyncing, setObsidianSyncing] = useState(false)
   const [mobileTagFilter, setMobileTagFilter] = useState('all')
   const [search, setSearch] = useState(externalSearch)
   const [parentId, setParentId] = useState('')
@@ -853,6 +854,37 @@ export default function NotesPanel({
     if (!currentId || !confirm('Delete this note?')) return
     const result = await deleteNote(currentId)
     onDeleted(result.deleted_ids || [currentId])
+  }
+
+  async function handleSyncToObsidian() {
+    if (!currentId) return
+    setObsidianSyncing(true)
+    try {
+      await save()
+      const result = await syncToObsidian(currentId)
+      onSaved(currentId, { obsidian_synced: 1, obsidian_path: result.path, obsidian_synced_at: result.synced_at, updated_at: Date.now() })
+    } catch (e) { alert('Sync to Obsidian failed: ' + e.message) }
+    finally { setObsidianSyncing(false) }
+  }
+
+  async function handlePullFromObsidian() {
+    if (!currentId) return
+    setObsidianSyncing(true)
+    try {
+      const result = await pullFromObsidian(currentId)
+      setTitle(result.title)
+      setBlocks(result.blocks.map(b => ({ ...b, id: crypto.randomUUID(), text: b.content || '' })))
+      onSaved(currentId, { title: result.title, obsidian_synced_at: result.synced_at, updated_at: result.synced_at })
+    } catch (e) { alert('Pull from Obsidian failed: ' + e.message) }
+    finally { setObsidianSyncing(false) }
+  }
+
+  async function handleUnsyncObsidian() {
+    if (!currentId || !confirm('Disconnect this note from Obsidian? (The file in Obsidian will stay)')) return
+    try {
+      await unsyncFromObsidian(currentId)
+      onSaved(currentId, { obsidian_synced: 0, obsidian_path: null, obsidian_synced_at: null })
+    } catch (e) { alert('Unsync failed: ' + e.message) }
   }
 
   async function handleCreateSubpage() { if (currentId) await onNew(currentId) }
@@ -1065,6 +1097,32 @@ export default function NotesPanel({
                 style={{ padding: '4px 8px', background: 'transparent', color: '#E24B4A', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>
                 <i className="ti ti-trash" />
               </button>
+
+              {/* Obsidian sync buttons */}
+              <div style={{ width: '1px', height: '20px', background: 'var(--color-border-tertiary)', margin: '0 2px' }} />
+              {note?.obsidian_synced ? (
+                <>
+                  <button onClick={handlePullFromObsidian} disabled={obsidianSyncing || !currentId}
+                    title="Pull latest from Obsidian"
+                    style={{ padding: '4px 8px', background: 'transparent', color: '#7F77DD', border: '0.5px solid #7F77DD55', borderRadius: '6px', cursor: obsidianSyncing ? 'not-allowed' : 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
+                    <i className="ti ti-cloud-download" />
+                    <span style={{ fontSize: '11px' }}>{obsidianSyncing ? '…' : 'Pull'}</span>
+                  </button>
+                  <button onClick={handleSyncToObsidian} disabled={obsidianSyncing || !currentId}
+                    title="Push to Obsidian vault"
+                    style={{ padding: '4px 8px', background: 'transparent', color: '#1D9E75', border: '0.5px solid #1D9E7555', borderRadius: '6px', cursor: obsidianSyncing ? 'not-allowed' : 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
+                    <i className="ti ti-cloud-upload" />
+                    <span style={{ fontSize: '11px' }}>{obsidianSyncing ? '…' : 'Push'}</span>
+                  </button>
+                </>
+              ) : (
+                <button onClick={handleSyncToObsidian} disabled={obsidianSyncing || !currentId}
+                  title="Connect this note to your Obsidian vault"
+                  style={{ padding: '4px 8px', background: 'transparent', color: 'var(--color-text-tertiary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: '6px', cursor: obsidianSyncing ? 'not-allowed' : 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit' }}>
+                  <i className="ti ti-brand-obsidian" />
+                  <span style={{ fontSize: '11px' }}>{obsidianSyncing ? 'Syncing…' : 'Obsidian'}</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -1166,6 +1224,26 @@ export default function NotesPanel({
                     </div>
                   )}
                 </div>
+
+                {/* Obsidian sync status */}
+                {note?.obsidian_synced ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: '#F0FBF7', border: '0.5px solid #1D9E7530', marginBottom: '14px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '11px', color: '#085041', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <i className="ti ti-circle-check-filled" style={{ color: '#1D9E75' }} />
+                      <strong>Synced to Obsidian</strong>
+                      {note.obsidian_synced_at && (
+                        <span style={{ color: '#1D9E75', fontWeight: 400 }}>
+                          · {new Date(parseInt(note.obsidian_synced_at)).toLocaleString()}
+                        </span>
+                      )}
+                    </span>
+                    <div style={{ flex: 1 }} />
+                    <button onClick={handleUnsyncObsidian}
+                      style={{ padding: '3px 8px', border: '0.5px solid #1D9E7540', borderRadius: '6px', background: 'transparent', color: '#085041', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      Disconnect
+                    </button>
+                  </div>
+                ) : null}
 
                 {/* linked items */}
                 <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} />
