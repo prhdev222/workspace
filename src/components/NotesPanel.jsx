@@ -782,6 +782,13 @@ export default function NotesPanel({
 
   function addBlock(type) {
     setBlocks(prev => [...prev, { id: crypto.randomUUID(), type, text: '', done: false }])
+    // Auto-focus the new block on mobile so the keyboard and format bar appear
+    if (isMobile) {
+      setTimeout(() => {
+        const all = document.querySelectorAll('[contenteditable="true"]')
+        if (all.length) all[all.length - 1].focus()
+      }, 80)
+    }
   }
 
   function addBlockBelow(idx) {
@@ -1256,11 +1263,17 @@ export default function NotesPanel({
                 {/* ── blocks ── */}
                 <div style={{ marginTop: '16px' }}>
                   {blocks.length === 0 && (
-                    <div style={{ padding: '20px 8px', color: 'var(--color-text-tertiary)', fontSize: '13px', fontStyle: 'italic' }}>
-                      {isMobile
-                        ? 'Tap the + button below to add a block, or type / to choose block type.'
-                        : 'Type / in any block to choose its type, or use the toolbar buttons above.'}
-                    </div>
+                    isMobile ? (
+                      <button onClick={() => addBlock('text')}
+                        style={{ width: '100%', padding: '28px 16px', border: '0.5px dashed var(--color-border-secondary)', borderRadius: '14px', background: 'transparent', color: 'var(--color-text-tertiary)', fontSize: '14px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', fontFamily: 'inherit' }}>
+                        <i className="ti ti-plus" style={{ fontSize: '26px' }} />
+                        แตะเพื่อเริ่มพิมพ์
+                      </button>
+                    ) : (
+                      <div style={{ padding: '20px 8px', color: 'var(--color-text-tertiary)', fontSize: '13px', fontStyle: 'italic' }}>
+                        Type / in any block to choose its type, or use the toolbar buttons above.
+                      </div>
+                    )
                   )}
                   {blocks.map((b, i) => (
                     <RichBlock
