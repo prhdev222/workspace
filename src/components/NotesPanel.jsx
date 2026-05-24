@@ -525,6 +525,12 @@ function RichBlock({
   const [slashMenu, setSlashMenu] = useState(null)
   const slashStart = useRef(-1)
 
+  // Set content once on mount — never use dangerouslySetInnerHTML on a contentEditable
+  // because React re-renders reset innerHTML and jump the cursor to the start
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = block.text || ''
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   function getTextStyle() {
     const base = { flex: 1, outline: 'none', lineHeight: 1.75, minHeight: '22px', wordBreak: 'break-word', fontFamily: 'inherit' }
     if (block.type === 'heading') return { ...base, fontSize: '18px', fontFamily: "'Lora', serif", fontWeight: '500' }
@@ -680,7 +686,6 @@ function RichBlock({
             block.type === 'todo'    ? 'Task…' :
             isMobile ? 'Write… (/ for menu)' : 'Write, or type / for commands…'
           }
-          dangerouslySetInnerHTML={{ __html: block.text }}
         />
 
         {/* delete */}
