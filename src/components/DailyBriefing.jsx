@@ -5,21 +5,20 @@ import { useMemo } from 'react'
 
 function LinkifiedText({ text }) {
   if (!text) return null
-  const urlRegex = /(https?:\/\/[^\s]+)/g
-  const parts = text.split(urlRegex)
+  const parts = text.split(/(https?:\/\/[^\s]+)/)
   return (
     <>
       {parts.map((part, i) =>
-        urlRegex.test(part) ? (
+        /^https?:\/\//.test(part) ? (
           <a
             key={i}
             href={part}
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
-            style={{ color: '#1D9E75', wordBreak: 'break-all', textDecoration: 'underline' }}
+            style={{ color: '#1D9E75', wordBreak: 'break-all', textDecoration: 'underline', fontSize: '13px' }}
           >
-            {part.replace(/^https?:\/\//, '').slice(0, 40)}{part.length > 50 ? '…' : ''}
+            {part.replace(/^https?:\/\//, '').slice(0, 40)}{part.length > 43 ? '…' : ''}
           </a>
         ) : (
           <span key={i}>{part}</span>
