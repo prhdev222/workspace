@@ -1230,24 +1230,17 @@ export default function NotesPanel({
                 {note?.title || 'No note selected'}
               </span>
               {currentId && note?.obsidian_synced && (
-                <>
-                  <button onClick={handlePullFromObsidian} disabled={obsidianSyncing}
-                    style={{ background: 'transparent', color: '#7F77DD', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
-                    title="Pull from Obsidian">
-                    <i className="ti ti-cloud-download" />
-                  </button>
-                  <button onClick={handleSyncToObsidian} disabled={obsidianSyncing}
-                    style={{ background: 'transparent', color: '#1D9E75', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
-                    title="Push to Obsidian">
-                    <i className="ti ti-cloud-upload" />
-                  </button>
-                </>
+                <button onClick={handlePullFromObsidian} disabled={obsidianSyncing}
+                  style={{ background: 'transparent', color: '#7F77DD', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
+                  title="Pull from Obsidian">
+                  <i className={obsidianSyncing ? 'ti ti-loader-2' : 'ti ti-cloud-download'} />
+                </button>
               )}
-              {currentId && !note?.obsidian_synced && (
+              {currentId && (
                 <button onClick={handleSyncToObsidian} disabled={obsidianSyncing}
-                  style={{ background: 'transparent', color: 'var(--color-text-tertiary)', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
-                  title="Connect to Obsidian">
-                  <i className="ti ti-brand-obsidian" />
+                  style={{ background: 'transparent', color: note?.obsidian_synced ? '#1D9E75' : 'var(--color-text-tertiary)', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
+                  title={note?.obsidian_synced ? 'Push to Obsidian' : 'Connect to Obsidian'}>
+                  <i className={obsidianSyncing ? 'ti ti-loader-2' : 'ti ti-cloud-upload'} />
                 </button>
               )}
               {currentId && (
