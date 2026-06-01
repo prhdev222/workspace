@@ -71,6 +71,19 @@ const TOOLS = [
     name: 'list_todos',
     description: 'ดูรายการ todos ทั้งหมดที่ยังไม่เสร็จ',
     inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'create_note',
+    description: 'สร้าง note ใหม่ใน workspace พร้อมเนื้อหา',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title:   { type: 'string', description: 'ชื่อ note' },
+        content: { type: 'string', description: 'เนื้อหา note (plain text หรือ markdown-style)' },
+        tags:    { type: 'array', items: { type: 'string' }, description: 'tags เช่น ["research", "clinical"]' }
+      },
+      required: ['title']
+    }
   }
 ]
 
@@ -133,6 +146,29 @@ async function handleTool(name, input, env) {
       return `${icon} ${t.text}${t.due_date ? ' (' + t.due_date + ')' : ''}`
     })
     return `📋 Todo (${rows.length} รายการ):\n${lines.join('\n')}`
+  }
+
+  if (name === 'create_note') {
+    const id = crypto.randomUUID()
+    const now = Date.now()
+    const tags = Array.isArray(input.tags) ? input.tags : []
+    await db.execute(
+      'INSERT INTO notes (id, title, tags, parent_id, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, input.title || 'Untitled', JSON.stringify(tags), null, now, now, now]
+    )
+    if (input.content) {
+      const lines = input.content.split('\n').filter(l => l.trim())
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        const type = line.startsWith('# ') ? 'heading' : line.startsWith('- ') ? 'bullet' : 'text'
+        const text = line.replace(/^#+\s/, '').replace(/^-\s/, '')
+        await db.execute(
+          'INSERT INTO blocks (id, note_id, type, content, position, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [crypto.randomUUID(), id, type, text, i, now]
+        )
+      }
+    }
+    return `📝 สร้าง note "${input.title}" แล้วค่ะ${tags.length ? ' tags: ' + tags.join(', ') : ''}\nURL: https://space.uraree.com`
   }
 
   throw new Error(`Unknown tool: ${name}`)
