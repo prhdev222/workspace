@@ -3,28 +3,64 @@
 
 import { useMemo } from 'react'
 
-function LinkifiedText({ text }) {
-  if (!text) return null
-  const parts = text.split(/(https?:\/\/[^\s]+)/)
+function extractUrls(text) {
+  if (!text) return { clean: text, urls: [] }
+  const urls = []
+  const clean = text.replace(/https?:\/\/[^\s|]+/g, match => {
+    urls.push(match.replace(/[|]$/, ''))
+    return ''
+  }).replace(/\s{2,}/g, ' ').trim()
+  return { clean, urls }
+}
+
+function urlLabel(url) {
+  if (/maps\.google|goo\.gl\/maps/i.test(url)) return '🗺 Google Maps'
+  if (/notes\.uraree|notion\.so/i.test(url)) return '📝 Note'
+  try {
+    const host = new URL(url).hostname.replace('www.', '')
+    return `🔗 ${host}`
+  } catch { return '🔗 Link' }
+}
+
+function LinkButtons({ text, location }) {
+  const { clean: cleanText, urls: textUrls } = extractUrls(text)
+  const { clean: cleanLoc, urls: locUrls } = extractUrls(location)
+  const allUrls = [...new Set([...textUrls, ...locUrls])]
+
   return (
-    <>
-      {parts.map((part, i) =>
-        /^https?:\/\//.test(part) ? (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            style={{ color: '#1D9E75', wordBreak: 'break-all', textDecoration: 'underline', fontSize: '13px' }}
-          >
-            {part.replace(/^https?:\/\//, '').slice(0, 40)}{part.length > 43 ? '…' : ''}
-          </a>
-        ) : (
-          <span key={i}>{part}</span>
-        )
+    <div>
+      <div style={{ fontSize: '14px', fontWeight: '500', color: 'var(--color-text-primary)', lineHeight: 1.5, marginBottom: allUrls.length ? '8px' : 0 }}>
+        {cleanText}
+      </div>
+      {cleanLoc && !locUrls.length && (
+        <div style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginBottom: allUrls.length ? '6px' : 0 }}>
+          <i className="ti ti-map-pin" style={{ fontSize: '11px' }} /> {cleanLoc}
+        </div>
       )}
-    </>
+      {allUrls.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {allUrls.map((url, i) => (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                padding: '5px 10px', borderRadius: '20px',
+                background: '#E1F5EE', color: '#085041',
+                fontSize: '12px', fontWeight: '500',
+                textDecoration: 'none', border: '0.5px solid #9FE1CB',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {urlLabel(url)}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -176,21 +212,7 @@ export default function DailyBriefing({ todos, onClose }) {
                     {a.start_time && <div style={{ fontSize: '13px', fontWeight: '600' }}>{a.start_time}</div>}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
-                      <LinkifiedText text={a.text} />
-                    </div>
-                    {a.location && (
-                      <div style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                        {/^https?:\/\//.test(a.location) ? (
-                          <a href={a.location} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                            style={{ color: '#1D9E75', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <i className="ti ti-map-pin" style={{ fontSize: '11px' }} /> {a.location.replace(/^https?:\/\//, '').slice(0, 40)}
-                          </a>
-                        ) : (
-                          <span><i className="ti ti-map-pin" style={{ fontSize: '11px' }} /> {a.location}</span>
-                        )}
-                      </div>
-                    )}
+                    <LinkButtons text={a.text} location={a.location} />
                   </div>
                 </div>
               ))}
