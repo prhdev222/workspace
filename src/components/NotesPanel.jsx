@@ -1225,10 +1225,31 @@ export default function NotesPanel({
 
           {/* mobile top mini-bar */}
           {isMobile && (
-            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {note?.title || 'No note selected'}
               </span>
+              {currentId && note?.obsidian_synced && (
+                <>
+                  <button onClick={handlePullFromObsidian} disabled={obsidianSyncing}
+                    style={{ background: 'transparent', color: '#7F77DD', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
+                    title="Pull from Obsidian">
+                    <i className="ti ti-cloud-download" />
+                  </button>
+                  <button onClick={handleSyncToObsidian} disabled={obsidianSyncing}
+                    style={{ background: 'transparent', color: '#1D9E75', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
+                    title="Push to Obsidian">
+                    <i className="ti ti-cloud-upload" />
+                  </button>
+                </>
+              )}
+              {currentId && !note?.obsidian_synced && (
+                <button onClick={handleSyncToObsidian} disabled={obsidianSyncing}
+                  style={{ background: 'transparent', color: 'var(--color-text-tertiary)', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}
+                  title="Connect to Obsidian">
+                  <i className="ti ti-brand-obsidian" />
+                </button>
+              )}
               {currentId && (
                 <button onClick={() => setReadMode(true)}
                   style={{ background: 'transparent', color: '#1D9E75', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}>
