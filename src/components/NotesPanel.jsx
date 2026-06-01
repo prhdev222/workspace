@@ -19,6 +19,7 @@ const BLOCK_ICONS = {
   todo:    'ti-circle',
   quote:   'ti-quote',
   bullet:  'ti-point',
+  image:   'ti-photo',
 }
 
 const SLASH_COMMANDS = [
@@ -27,6 +28,7 @@ const SLASH_COMMANDS = [
   { type: 'todo',    icon: 'ti-checkbox',   label: 'To-do',    desc: 'Checkable task' },
   { type: 'quote',   icon: 'ti-quote',      label: 'Quote',    desc: 'Highlighted callout' },
   { type: 'bullet',  icon: 'ti-list',       label: 'Bullet',   desc: 'List item' },
+  { type: 'image',   icon: 'ti-photo',      label: 'Image',    desc: 'Drag & drop or paste image' },
 ]
 
 // keyboard shortcut map shown in help panel
@@ -658,35 +660,56 @@ function RichBlock({
           </div>
         )}
 
-        {/* icon / checkbox */}
-        <i
-          className={`ti ${block.done ? 'ti-circle-check' : BLOCK_ICONS[block.type] || 'ti-align-left'}`}
-          onClick={block.type === 'todo' ? () => onToggleDone(index) : undefined}
-          style={{ fontSize: '14px', color: block.done ? '#1D9E75' : 'var(--color-text-secondary)', cursor: block.type === 'todo' ? 'pointer' : 'default', flexShrink: 0, paddingTop: '3px' }}
-        />
+        {/* icon / checkbox — hidden for image blocks */}
+        {block.type !== 'image' && (
+          <i
+            className={`ti ${block.done ? 'ti-circle-check' : BLOCK_ICONS[block.type] || 'ti-align-left'}`}
+            onClick={block.type === 'todo' ? () => onToggleDone(index) : undefined}
+            style={{ fontSize: '14px', color: block.done ? '#1D9E75' : 'var(--color-text-secondary)', cursor: block.type === 'todo' ? 'pointer' : 'default', flexShrink: 0, paddingTop: '3px' }}
+          />
+        )}
 
         {block.type === 'bullet' && (
           <span style={{ color: '#1D9E75', paddingTop: '2px', flexShrink: 0, fontSize: '16px', lineHeight: '22px' }}>•</span>
         )}
 
-        {/* editable content */}
-        <div
-          ref={ref}
-          contentEditable
-          suppressContentEditableWarning
-          data-editor-area
-          onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          onBlur={e => onTextChange(index, e.target.innerHTML)}
-          style={getTextStyle()}
-          data-placeholder={
-            block.type === 'heading' ? 'Heading…' :
-            block.type === 'quote'   ? 'Quote…' :
-            block.type === 'bullet'  ? 'List item…' :
-            block.type === 'todo'    ? 'Task…' :
-            isMobile ? 'Write… (/ for menu)' : 'Write, or type / for commands…'
-          }
-        />
+        {/* image block */}
+        {block.type === 'image' ? (
+          block.text ? (
+            <div style={{ flex: 1, position: 'relative' }}>
+              <img
+                src={block.text}
+                alt=""
+                style={{ maxWidth: '100%', borderRadius: '10px', display: 'block', cursor: 'pointer' }}
+                onClick={() => window.open(block.text, '_blank')}
+              />
+            </div>
+          ) : (
+            <div style={{ flex: 1, padding: '28px', border: '1.5px dashed var(--color-border-secondary)', borderRadius: '10px', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '13px' }}>
+              <i className="ti ti-photo" style={{ fontSize: '24px', display: 'block', marginBottom: '6px' }} />
+              ลากรูปมาวางที่นี่ หรือ paste
+            </div>
+          )
+        ) : (
+          /* editable content */
+          <div
+            ref={ref}
+            contentEditable
+            suppressContentEditableWarning
+            data-editor-area
+            onKeyDown={handleKeyDown}
+            onInput={handleInput}
+            onBlur={e => onTextChange(index, e.target.innerHTML)}
+            style={getTextStyle()}
+            data-placeholder={
+              block.type === 'heading' ? 'Heading…' :
+              block.type === 'quote'   ? 'Quote…' :
+              block.type === 'bullet'  ? 'List item…' :
+              block.type === 'todo'    ? 'Task…' :
+              isMobile ? 'Write… (/ for menu)' : 'Write, or type / for commands…'
+            }
+          />
+        )}
 
         {/* delete */}
         <button onClick={() => onDelete(index)} className="block-delete-btn"
@@ -836,6 +859,44 @@ export default function NotesPanel({
       return next
     })
     setDraggedBlockIdx(null); setBlockDropTarget(null)
+  }
+
+  // ── image drop / paste ────────────────────────────────────────────────────
+
+  function insertImageBlock(dataUrl) {
+    setBlocks(prev => [...prev, { id: crypto.randomUUID(), type: 'image', text: dataUrl, done: false }])
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = e => resolve(e.target.result)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleEditorDrop(e) {
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'))
+    if (files.length === 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    for (const file of files) {
+      const dataUrl = await readFileAsDataUrl(file)
+      insertImageBlock(dataUrl)
+    }
+  }
+
+  async function handleEditorPaste(e) {
+    const items = Array.from(e.clipboardData?.items || []).filter(i => i.type.startsWith('image/'))
+    if (items.length === 0) return
+    e.preventDefault()
+    for (const item of items) {
+      const file = item.getAsFile()
+      if (!file) continue
+      const dataUrl = await readFileAsDataUrl(file)
+      insertImageBlock(dataUrl)
+    }
   }
 
   // ── note ops ───────────────────────────────────────────────────────────────
@@ -1088,7 +1149,7 @@ export default function NotesPanel({
           {!isMobile && (
             <div style={{ padding: '8px 20px', borderBottom: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginRight: '2px' }}>Add:</span>
-              {[['heading','ti-heading'],['text','ti-text-size'],['todo','ti-checkbox'],['quote','ti-quote'],['bullet','ti-list']].map(([type, icon]) => (
+              {[['heading','ti-heading'],['text','ti-text-size'],['todo','ti-checkbox'],['quote','ti-quote'],['bullet','ti-list'],['image','ti-photo']].map(([type, icon]) => (
                 <button key={type} onClick={() => addBlock(type)}
                   style={{ padding: '4px 8px', border: '0.5px solid var(--color-border-tertiary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', cursor: 'pointer', borderRadius: '6px', fontSize: '12px', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <i className={`ti ${icon}`} />
@@ -1155,6 +1216,9 @@ export default function NotesPanel({
           <div
             data-editor-area
             style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 14px 88px' : '24px 32px' }}
+            onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
+            onDrop={handleEditorDrop}
+            onPaste={handleEditorPaste}
           >
             {currentId ? (
               <>
