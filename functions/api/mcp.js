@@ -73,6 +73,19 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} }
   },
   {
+    name: 'create_idea',
+    description: 'โพสต์ idea ใหม่ใน workspace',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'เนื้อหา idea' },
+        emoji:   { type: 'string', description: 'emoji เช่น 💡 🔬 🧠 (optional)' },
+        color:   { type: 'string', enum: ['teal', 'blue', 'purple', 'orange', 'pink'], description: 'สีการ์ด (default: teal)' }
+      },
+      required: ['content']
+    }
+  },
+  {
     name: 'create_note',
     description: 'สร้าง note ใหม่ใน workspace พร้อมเนื้อหา',
     inputSchema: {
@@ -146,6 +159,18 @@ async function handleTool(name, input, env) {
       return `${icon} ${t.text}${t.due_date ? ' (' + t.due_date + ')' : ''}`
     })
     return `📋 Todo (${rows.length} รายการ):\n${lines.join('\n')}`
+  }
+
+  if (name === 'create_idea') {
+    const id = crypto.randomUUID()
+    const now = Date.now()
+    const EMOJIS = ['💡','🔬','📌','🧠','⚡','🌱','🔭','🎯','📡','🧪','💊','🩺','📊','🌀','✨']
+    const emoji = input.emoji || EMOJIS[Math.floor(Math.random() * EMOJIS.length)]
+    await db.execute(
+      'INSERT INTO ideas (id, content, color, emoji, created_at) VALUES (?, ?, ?, ?, ?)',
+      [id, input.content, input.color || 'teal', emoji, now]
+    )
+    return `${emoji} โพสต์ idea แล้วค่ะ: "${input.content}"`
   }
 
   if (name === 'create_note') {
