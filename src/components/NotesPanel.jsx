@@ -1410,18 +1410,26 @@ export default function NotesPanel({
           position: 'fixed', inset: 0, zIndex: 500,
           background: 'var(--color-background-primary)',
           overflowY: 'auto',
-          padding: '20px 18px 80px',
+          padding: '0 18px 80px',
         }}>
-          <button onClick={() => setReadMode(false)} style={{
-            position: 'fixed', bottom: '24px', right: '20px',
-            width: '44px', height: '44px', borderRadius: '50%',
-            background: '#1D9E75', color: 'white', border: 'none',
-            fontSize: '18px', cursor: 'pointer', zIndex: 501,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(29,158,117,0.4)'
+          {/* top bar with back button */}
+          <div style={{
+            position: 'sticky', top: 0, zIndex: 502,
+            background: 'var(--color-background-primary)',
+            borderBottom: '0.5px solid var(--color-border-tertiary)',
+            padding: '10px 0', marginBottom: '20px',
+            display: 'flex', alignItems: 'center', gap: '10px'
           }}>
-            <i className="ti ti-minimize" />
-          </button>
+            <button onClick={() => setReadMode(false)} style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: 'transparent', border: 'none',
+              color: '#1D9E75', fontSize: '14px', fontWeight: '500',
+              cursor: 'pointer', fontFamily: 'inherit', padding: '6px 0'
+            }}>
+              <i className="ti ti-arrow-left" style={{ fontSize: '16px' }} />
+              กลับ
+            </button>
+          </div>
 
           <div style={{ fontFamily: "'Lora', serif", fontSize: '24px', fontWeight: '500', lineHeight: 1.3, marginBottom: '20px', color: 'var(--color-text-primary)' }}>
             {title || 'Untitled note'}
