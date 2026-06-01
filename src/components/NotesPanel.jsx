@@ -745,6 +745,7 @@ export default function NotesPanel({
   const [draggedBlockIdx, setDraggedBlockIdx] = useState(null)
   const [blockDropTarget, setBlockDropTarget] = useState(null)
   const [showShortcuts, setShowShortcuts] = useState(false)
+  const [readMode, setReadMode] = useState(false)
   const triggerLinkRef = useRef(null)
   const titleRef = useRef()
 
@@ -1205,6 +1206,12 @@ export default function NotesPanel({
               <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {note?.title || 'No note selected'}
               </span>
+              {currentId && (
+                <button onClick={() => setReadMode(true)}
+                  style={{ background: 'transparent', color: '#1D9E75', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}>
+                  <i className="ti ti-maximize" />
+                </button>
+              )}
               <button onClick={handleDelete} disabled={!currentId}
                 style={{ background: 'transparent', color: '#E24B4A', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}>
                 <i className="ti ti-trash" />
@@ -1374,6 +1381,58 @@ export default function NotesPanel({
           </div>
         </div>
       </div>
+
+      {/* ── Read Mode overlay (mobile) ── */}
+      {readMode && isMobile && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'var(--color-background-primary)',
+          overflowY: 'auto',
+          padding: '20px 18px 80px',
+        }}>
+          <button onClick={() => setReadMode(false)} style={{
+            position: 'fixed', bottom: '24px', right: '20px',
+            width: '44px', height: '44px', borderRadius: '50%',
+            background: '#1D9E75', color: 'white', border: 'none',
+            fontSize: '18px', cursor: 'pointer', zIndex: 501,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(29,158,117,0.4)'
+          }}>
+            <i className="ti ti-minimize" />
+          </button>
+
+          <div style={{ fontFamily: "'Lora', serif", fontSize: '24px', fontWeight: '500', lineHeight: 1.3, marginBottom: '20px', color: 'var(--color-text-primary)' }}>
+            {title || 'Untitled note'}
+          </div>
+
+          <div>
+            {blocks.map((block, i) => {
+              if (block.type === 'image') return (
+                <div key={block.id || i} style={{ marginBottom: '12px' }}>
+                  {block.text && <img src={block.text} alt="" style={{ maxWidth: '100%', borderRadius: '10px' }} />}
+                </div>
+              )
+              return (
+                <div key={block.id || i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '8px' }}>
+                  {block.type === 'bullet' && <span style={{ color: '#1D9E75', flexShrink: 0, fontSize: '16px', lineHeight: '26px' }}>•</span>}
+                  {block.type === 'todo' && <i className={`ti ${block.done ? 'ti-circle-check' : 'ti-circle'}`} style={{ color: block.done ? '#1D9E75' : 'var(--color-text-tertiary)', flexShrink: 0, paddingTop: '4px' }} />}
+                  <div style={{
+                    lineHeight: 1.75, wordBreak: 'break-word',
+                    fontSize: block.type === 'heading' ? '20px' : '15px',
+                    fontFamily: block.type === 'heading' ? "'Lora', serif" : 'inherit',
+                    fontWeight: block.type === 'heading' ? '500' : '400',
+                    fontStyle: block.type === 'quote' ? 'italic' : 'normal',
+                    borderLeft: block.type === 'quote' ? '3px solid #1D9E75' : 'none',
+                    paddingLeft: block.type === 'quote' ? '12px' : '0',
+                    color: block.done ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
+                    textDecoration: block.done ? 'line-through' : 'none',
+                  }} dangerouslySetInnerHTML={{ __html: block.text || '' }} />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </>
   )
 }
