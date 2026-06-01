@@ -31,6 +31,7 @@ export default function DailyBriefing({ todos, onClose }) {
   const { appointments, tasks } = useMemo(() => {
     const pending = todos.filter(t => !t.done)
 
+    const seen = new Set()
     const appointments = pending
       .filter(t => t.item_type === 'appointment' && t.start_date >= todayStr)
       .sort((a, b) => {
@@ -38,10 +39,20 @@ export default function DailyBriefing({ todos, onClose }) {
         const db = (b.start_date || '') + (b.start_time || '')
         return da.localeCompare(db)
       })
+      .filter(t => {
+        const key = `${t.start_date}|${t.text}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
       .slice(0, 6)
 
     const tasks = pending
-      .filter(t => t.item_type !== 'appointment' && (t.due_label === 'today' || t.due_date === todayStr || t.section === 'today'))
+      .filter(t =>
+        t.item_type !== 'appointment' &&
+        t.item_type !== 'health' &&
+        (t.due_label === 'today' || t.due_date === todayStr || t.section === 'today')
+      )
       .slice(0, 8)
 
     return { appointments, tasks }
