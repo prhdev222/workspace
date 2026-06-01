@@ -747,6 +747,7 @@ export default function NotesPanel({
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [readMode, setReadMode] = useState(false)
   const [sidebarHidden, setSidebarHidden] = useState(false)
+  const [metaHidden, setMetaHidden] = useState(false)
   const triggerLinkRef = useRef(null)
   const titleRef = useRef()
 
@@ -1251,7 +1252,7 @@ export default function NotesPanel({
           >
             {currentId ? (
               <>
-                {/* breadcrumb */}
+                {/* breadcrumb + meta toggle */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
                   {breadcrumb.map((item, idx) => (
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1262,6 +1263,12 @@ export default function NotesPanel({
                       {idx < breadcrumb.length - 1 && <span style={{ fontSize: '10px', color: 'var(--color-text-tertiary)' }}>/</span>}
                     </div>
                   ))}
+                  <button onClick={() => setMetaHidden(p => !p)}
+                    title={metaHidden ? 'Show page info' : 'Hide page info'}
+                    style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-tertiary)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px', borderRadius: '6px' }}>
+                    <i className={`ti ${metaHidden ? 'ti-eye' : 'ti-eye-off'}`} style={{ fontSize: '13px' }} />
+                    {metaHidden ? 'Show info' : 'Hide info'}
+                  </button>
                 </div>
 
                 {/* title */}
@@ -1278,7 +1285,7 @@ export default function NotesPanel({
                   ))}
                 </div>
 
-                {/* subpage controls */}
+                {!metaHidden && <>{/* subpage controls */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
                   <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
                     {note?.parent_id ? 'Subpage in nested notes' : 'Top-level page'}
@@ -1352,8 +1359,7 @@ export default function NotesPanel({
 
                 {/* linked items */}
                 <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} isMobile={true} />
-
-                {/* ── blocks ── */}
+                </>}
                 <div style={{ marginTop: '16px' }}>
                   {blocks.length === 0 && (
                     isMobile ? (
