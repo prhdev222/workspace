@@ -50,10 +50,12 @@ export default function LinkedItemsPanel({
   setLinks,
   entities,
   onNavigate,
-  compact = false
+  compact = false,
+  isMobile = false
 }) {
   const [quickInput, setQuickInput] = useState('')
   const [saving, setSaving] = useState(false)
+  const [collapsed, setCollapsed] = useState(isMobile)
   const index = useMemo(() => buildIndex(entities), [entities])
   const sourceLinks = links.filter(link => link.from_type === sourceType && link.from_id === sourceId)
   const { type: quickType, query } = parseQuickCommand(quickInput)
@@ -96,14 +98,28 @@ export default function LinkedItemsPanel({
   return (
     <div style={{
       marginTop: compact ? '10px' : '18px',
-      padding: compact ? '10px' : '12px',
       borderRadius: '14px',
       border: '0.5px solid var(--color-border-tertiary)',
-      background: 'var(--color-background-secondary)'
+      background: 'var(--color-background-secondary)',
+      overflow: 'hidden'
     }}>
-      <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-        Linked Items
+      {/* header — clickable on mobile */}
+      <div
+        onClick={isMobile ? () => setCollapsed(p => !p) : undefined}
+        style={{
+          padding: compact ? '10px' : '12px',
+          paddingBottom: collapsed ? (compact ? '10px' : '12px') : '0',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: isMobile ? 'pointer' : 'default'
+        }}
+      >
+        <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Linked Items {sourceLinks.length > 0 && <span style={{ background: 'var(--color-border-tertiary)', borderRadius: '8px', padding: '1px 6px', marginLeft: '4px' }}>{sourceLinks.length}</span>}
+        </div>
+        {isMobile && <i className={`ti ${collapsed ? 'ti-chevron-down' : 'ti-chevron-up'}`} style={{ fontSize: '13px', color: 'var(--color-text-tertiary)' }} />}
       </div>
+
+      {!collapsed && <div style={{ padding: compact ? '0 10px 10px' : '0 12px 12px' }}>
       <input
         value={quickInput}
         onChange={e => setQuickInput(e.target.value)}
@@ -226,6 +242,7 @@ export default function LinkedItemsPanel({
           })
         )}
       </div>
+      </div>}
     </div>
   )
 }

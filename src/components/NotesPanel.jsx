@@ -1322,7 +1322,7 @@ export default function NotesPanel({
                 ) : null}
 
                 {/* linked items */}
-                <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} />
+                <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} isMobile={isMobile} />
 
                 {/* ── blocks ── */}
                 <div style={{ marginTop: '16px' }}>
