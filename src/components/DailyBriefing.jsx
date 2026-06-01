@@ -53,6 +53,7 @@ function greet() {
 
 export default function DailyBriefing({ todos, onClose }) {
   const todayStr = today()
+  const isMobile = window.innerWidth <= 640
 
   const { appointments, tasks } = useMemo(() => {
     const pending = todos.filter(t => !t.done)
@@ -93,21 +94,23 @@ export default function DailyBriefing({ todos, onClose }) {
         position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(0,0,0,0.55)',
         backdropFilter: 'blur(6px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '16px'
+        display: 'flex',
+        alignItems: isMobile ? 'flex-end' : 'center',
+        justifyContent: 'center',
+        padding: isMobile ? '0' : '16px'
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--color-background-primary)',
-          borderRadius: '20px',
+          borderRadius: isMobile ? '20px 20px 0 0' : '20px',
           width: '100%',
-          maxWidth: '560px',
-          maxHeight: '88vh',
+          maxWidth: isMobile ? '100%' : '560px',
+          maxHeight: isMobile ? '92vh' : '88vh',
           overflowY: 'auto',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
-          padding: '28px 28px 24px',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
+          padding: isMobile ? '20px 18px 32px' : '28px 28px 24px',
           position: 'relative'
         }}
       >
@@ -127,9 +130,14 @@ export default function DailyBriefing({ todos, onClose }) {
           <i className="ti ti-x" />
         </button>
 
+        {/* drag handle — mobile */}
+        {isMobile && (
+          <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: 'var(--color-border-secondary)', margin: '0 auto 18px' }} />
+        )}
+
         {/* Header */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ fontSize: '22px', fontWeight: '600', marginBottom: '4px' }}>
+        <div style={{ marginBottom: isMobile ? '18px' : '24px', paddingRight: '36px' }}>
+          <div style={{ fontSize: isMobile ? '20px' : '22px', fontWeight: '600', marginBottom: '4px' }}>
             {greet()}
           </div>
           <div style={{ fontSize: '13px', color: 'var(--color-text-tertiary)' }}>
@@ -157,18 +165,19 @@ export default function DailyBriefing({ todos, onClose }) {
                   }}
                 >
                   <div style={{
-                    minWidth: '52px',
+                    minWidth: isMobile ? '48px' : '52px',
                     textAlign: 'center',
                     padding: '6px 8px',
                     borderRadius: '10px',
                     background: a.start_date === todayStr ? '#1D9E75' : 'var(--color-background-primary)',
                     color: a.start_date === todayStr ? 'white' : 'var(--color-text-secondary)',
+                    flexShrink: 0,
                   }}>
                     <div style={{ fontSize: '10px', fontWeight: '500' }}>{formatDate(a.start_date)}</div>
                     {a.start_time && <div style={{ fontSize: '13px', fontWeight: '600' }}>{a.start_time}</div>}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '15px', fontWeight: '500', color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: isMobile ? '14px' : '15px', fontWeight: '500', color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
                       <LinkifiedText text={a.text} />
                     </div>
                     {a.location && (
@@ -231,10 +240,10 @@ export default function DailyBriefing({ todos, onClose }) {
         <button
           onClick={onClose}
           style={{
-            marginTop: '20px', width: '100%', padding: '12px',
+            marginTop: '20px', width: '100%', padding: isMobile ? '14px' : '12px',
             background: '#1D9E75', color: 'white',
-            border: 'none', borderRadius: '12px',
-            fontSize: '14px', fontWeight: '500',
+            border: 'none', borderRadius: '14px',
+            fontSize: isMobile ? '15px' : '14px', fontWeight: '500',
             cursor: 'pointer', fontFamily: 'inherit'
           }}
         >
