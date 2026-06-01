@@ -6,6 +6,7 @@ import TodoPanel from './components/TodoPanel'
 import MindMapPanel from './components/MindMapPanel'
 import IdeasPanel from './components/IdeasPanel'
 import AIAssistant from './components/AIAssistant'
+import DailyBriefing from './components/DailyBriefing'
 import { getNotes, getTodos, getIdeas, getMindMaps, getLinks, createNote, logout } from './lib/api'
 
 const VIEWS = [
@@ -30,6 +31,7 @@ export default function App() {
   const [openMindMapId, setOpenMindMapId] = useState(null)
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 900)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [showBriefing, setShowBriefing] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('workspace-theme') || 'light')
   const [fontScale, setFontScale] = useState(() => {
     const saved = parseFloat(localStorage.getItem('workspace-font-scale') || '1')
@@ -102,6 +104,7 @@ export default function App() {
     const [td, id, mm, lk] = await Promise.all([getTodos(), getIdeas(), getMindMaps(), getLinks()])
     setTodos(td); setIdeas(id); setMindMaps(mm); setLinks(lk)
     setAuthed(true)
+    setShowBriefing(true)
   }
 
   async function handleLogout() {
@@ -430,6 +433,8 @@ export default function App() {
         onNoteCreated={note => setCurrentNoteId(note.id)}
         onTodoCreated={() => getTodos().then(setTodos).catch(console.error)}
       />
+
+      {showBriefing && <DailyBriefing todos={todos} onClose={() => setShowBriefing(false)} />}
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: isMobile ? 'auto' : 'hidden', minHeight: 0 }}>
