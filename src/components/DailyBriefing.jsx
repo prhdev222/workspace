@@ -3,6 +3,32 @@
 
 import { useMemo } from 'react'
 
+function LinkifiedText({ text }) {
+  if (!text) return null
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlRegex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        urlRegex.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{ color: '#1D9E75', wordBreak: 'break-all', textDecoration: 'underline' }}
+          >
+            {part.replace(/^https?:\/\//, '').slice(0, 40)}{part.length > 50 ? '…' : ''}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -142,12 +168,19 @@ export default function DailyBriefing({ todos, onClose }) {
                     {a.start_time && <div style={{ fontSize: '13px', fontWeight: '600' }}>{a.start_time}</div>}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '15px', fontWeight: '500', color: 'var(--color-text-primary)' }}>
-                      {a.text}
+                    <div style={{ fontSize: '15px', fontWeight: '500', color: 'var(--color-text-primary)', lineHeight: 1.5 }}>
+                      <LinkifiedText text={a.text} />
                     </div>
                     {a.location && (
-                      <div style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginTop: '2px' }}>
-                        <i className="ti ti-map-pin" style={{ fontSize: '11px' }} /> {a.location}
+                      <div style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
+                        {/^https?:\/\//.test(a.location) ? (
+                          <a href={a.location} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                            style={{ color: '#1D9E75', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <i className="ti ti-map-pin" style={{ fontSize: '11px' }} /> {a.location.replace(/^https?:\/\//, '').slice(0, 40)}
+                          </a>
+                        ) : (
+                          <span><i className="ti ti-map-pin" style={{ fontSize: '11px' }} /> {a.location}</span>
+                        )}
                       </div>
                     )}
                   </div>
