@@ -746,6 +746,7 @@ export default function NotesPanel({
   const [blockDropTarget, setBlockDropTarget] = useState(null)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [readMode, setReadMode] = useState(false)
+  const [sidebarHidden, setSidebarHidden] = useState(false)
   const triggerLinkRef = useRef(null)
   const titleRef = useRef()
 
@@ -1076,15 +1077,36 @@ export default function NotesPanel({
         />
       )}
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row' }}>
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row', position: 'relative' }}>
+
+        {/* sidebar toggle button — desktop only */}
+        {!isMobile && (
+          <button onClick={() => setSidebarHidden(p => !p)} title={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
+            style={{
+              position: 'absolute', left: sidebarHidden ? '0' : '220px', top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 10, width: '18px', height: '40px',
+              background: 'var(--color-background-secondary)',
+              border: '0.5px solid var(--color-border-tertiary)',
+              borderLeft: sidebarHidden ? '0.5px solid var(--color-border-tertiary)' : 'none',
+              borderRadius: sidebarHidden ? '0 6px 6px 0' : '0 6px 6px 0',
+              cursor: 'pointer', color: 'var(--color-text-tertiary)', fontSize: '11px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'left 0.2s'
+            }}>
+            <i className={`ti ${sidebarHidden ? 'ti-chevron-right' : 'ti-chevron-left'}`} />
+          </button>
+        )}
 
         {/* ── sidebar ── */}
         <div style={{
-          width: isMobile ? '100%' : '220px',
+          width: isMobile ? '100%' : sidebarHidden ? '0' : '220px',
           maxHeight: isMobile ? '154px' : 'none',
           borderRight: isMobile ? 'none' : '0.5px solid var(--color-border-tertiary)',
           borderBottom: isMobile ? '0.5px solid var(--color-border-tertiary)' : 'none',
-          display: 'flex', flexDirection: 'column', background: 'var(--color-background-secondary)'
+          display: 'flex', flexDirection: 'column', background: 'var(--color-background-secondary)',
+          overflow: 'hidden', flexShrink: 0,
+          transition: 'width 0.2s'
         }}>
           <div style={{ padding: isMobile ? '8px' : '10px 8px' }}>
             <div style={{ position: 'relative', marginBottom: '8px' }}>
@@ -1329,7 +1351,7 @@ export default function NotesPanel({
                 ) : null}
 
                 {/* linked items */}
-                <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} isMobile={isMobile} />
+                <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} isMobile={true} />
 
                 {/* ── blocks ── */}
                 <div style={{ marginTop: '16px' }}>
