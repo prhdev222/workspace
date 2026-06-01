@@ -13,3 +13,7 @@ GITHUB_REPO  = "obsidian_workspace"
 # TURSO_TOKEN    = "your-turso-auth-token"
 # SESSION_SECRET = "a-long-random-string-min-32-chars"
 # GITHUB_TOKEN   = "your-github-personal-access-token"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "workspace-attachments"

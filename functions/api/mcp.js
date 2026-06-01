@@ -11,18 +11,34 @@ function json(data, status = 200) {
   })
 }
 
+const R2_PUBLIC_URL = 'https://pub-ab79910c37a84799a9cf9f45fe44da06.r2.dev'
+
 const TOOLS = [
+  {
+    name: 'upload_file',
+    description: 'อัปโหลดไฟล์ (PDF, รูป) ขึ้น R2 แล้วได้ URL สำหรับแนบใน appointment',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filename: { type: 'string', description: 'ชื่อไฟล์ เช่น meeting.pdf' },
+        data:     { type: 'string', description: 'base64 encoded file content' },
+        mime_type:{ type: 'string', description: 'เช่น application/pdf หรือ image/jpeg' }
+      },
+      required: ['filename', 'data']
+    }
+  },
   {
     name: 'add_appointment',
     description: 'บันทึกนัดหมาย/appointment ในปฏิทิน',
     inputSchema: {
       type: 'object',
       properties: {
-        text:       { type: 'string', description: 'ชื่อนัดหมาย' },
-        start_date: { type: 'string', description: 'วันที่ รูปแบบ YYYY-MM-DD' },
-        start_time: { type: 'string', description: 'เวลาเริ่ม รูปแบบ HH:MM (optional)' },
-        end_time:   { type: 'string', description: 'เวลาสิ้นสุด รูปแบบ HH:MM (optional)' },
-        location:   { type: 'string', description: 'สถานที่ (optional)' }
+        text:           { type: 'string', description: 'ชื่อนัดหมาย' },
+        start_date:     { type: 'string', description: 'วันที่ รูปแบบ YYYY-MM-DD' },
+        start_time:     { type: 'string', description: 'เวลาเริ่ม รูปแบบ HH:MM (optional)' },
+        end_time:       { type: 'string', description: 'เวลาสิ้นสุด รูปแบบ HH:MM (optional)' },
+        location:       { type: 'string', description: 'สถานที่ (optional)' },
+        attachment_url: { type: 'string', description: 'URL ของไฟล์แนบ จาก upload_file (optional)' }
       },
       required: ['text', 'start_date']
     }
@@ -61,14 +77,25 @@ const TOOLS = [
 async function handleTool(name, input, env) {
   const db = getDb(env)
 
+  if (name === 'upload_file') {
+    if (!env.R2) throw new Error('R2 binding not configured')
+    const { filename, data, mime_type = 'application/octet-stream' } = input
+    const ext = filename.split('.').pop().toLowerCase()
+    const key = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`
+    const binary = Uint8Array.from(atob(data), c => c.charCodeAt(0))
+    await env.R2.put(key, binary, { httpMetadata: { contentType: mime_type } })
+    const url = `${R2_PUBLIC_URL}/${key}`
+    return `✅ อัปโหลดสำเร็จ\nURL: ${url}`
+  }
+
   if (name === 'add_appointment') {
     const id = crypto.randomUUID()
     const now = Date.now()
     await db.execute(
       'INSERT INTO todos (id, text, done, item_type, priority, start_date, due_date, start_time, end_time, location, attachment_url, due_label, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, input.text, 0, 'appointment', 'med', input.start_date, input.start_date, input.start_time || null, input.end_time || null, input.location || '', '', input.start_date, 'upcoming', now]
+      [id, input.text, 0, 'appointment', 'med', input.start_date, input.start_date, input.start_time || null, input.end_time || null, input.location || '', input.attachment_url || '', input.start_date, 'upcoming', now]
     )
-    return `✅ บันทึกนัดหมาย "${input.text}" วันที่ ${input.start_date}${input.start_time ? ' เวลา ' + input.start_time : ''}${input.location ? ' ที่ ' + input.location : ''} แล้วค่ะ`
+    return `✅ บันทึกนัดหมาย "${input.text}" วันที่ ${input.start_date}${input.start_time ? ' เวลา ' + input.start_time : ''}${input.location ? ' ที่ ' + input.location : ''}${input.attachment_url ? ' 📎' : ''} แล้วค่ะ`
   }
 
   if (name === 'add_task') {
