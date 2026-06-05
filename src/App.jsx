@@ -7,6 +7,7 @@ import MindMapPanel from './components/MindMapPanel'
 import IdeasPanel from './components/IdeasPanel'
 import AIAssistant from './components/AIAssistant'
 import DailyBriefing from './components/DailyBriefing'
+import BookUploadPanel from './components/BookUploadPanel'
 import { getNotes, getTodos, getIdeas, getMindMaps, getLinks, createNote, logout } from './lib/api'
 
 const VIEWS = [
@@ -14,6 +15,7 @@ const VIEWS = [
   { id: 'todo',    label: 'To-Do',    icon: 'ti-check' },
   { id: 'mindmap', label: 'Mind Map', icon: 'ti-git-fork' },
   { id: 'ideas',   label: 'Ideas',    icon: 'ti-bulb' },
+  { id: 'library', label: 'Library',  icon: 'ti-books' },
 ]
 
 export default function App() {
@@ -457,6 +459,7 @@ export default function App() {
         {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} selectedTodoId={selectedTodoId} setSelectedTodoId={setSelectedTodoId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
         {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
         {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} selectedIdeaId={selectedIdeaId} setSelectedIdeaId={setSelectedIdeaId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
+        {view === 'library' && <BookUploadPanel isMobile={isMobile} />}
       </div>
     </div>
   )
