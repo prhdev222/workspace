@@ -24,19 +24,35 @@ function detectType(key) {
 }
 
 function parseName(key) {
-  // key format: books/1717123456789-safe-name.pdf
-  const filename = key.replace('books/', '')
-  // strip leading timestamp (digits + dash)
-  return filename.replace(/^\d+-/, '').replace(/-/g, ' ').replace(/\.[^.]+$/, m => m)
+  // strip prefix if any (books/...)
+  const filename = key.includes('/') ? key.split('/').pop() : key
+  // strip leading timestamp+uuid (e.g. 1717123456789-a1b2c3d4. or 1717123456789-)
+  return filename
+    .replace(/^\d{10,}-[a-f0-9]+-/, '')  // timestamp-uuid- prefix
+    .replace(/^\d{10,}-/, '')             // timestamp- prefix only
+    .replace(/-/g, ' ')
+    || filename
 }
 
 export async function onRequestGet({ env }) {
   if (!env.R2) return json({ error: 'R2 not configured' }, 500)
 
-  const list = await env.R2.list({ prefix: 'books/', limit: 500 })
+  // list both root-level files and books/ prefix
+  const [rootList, booksList] = await Promise.all([
+    env.R2.list({ limit: 500 }),
+    env.R2.list({ prefix: 'books/', limit: 500 })
+  ])
 
-  const files = (list.objects || [])
-    .filter(obj => obj.key !== 'books/')
+  const booksKeys = new Set((booksList.objects || []).map(o => o.key))
+
+  const allObjects = [
+    // root-level files (not folders/prefixes)
+    ...(rootList.objects || []).filter(o => !o.key.endsWith('/') && !booksKeys.has(o.key)),
+    // books/ prefix files
+    ...(booksList.objects || []).filter(o => o.key !== 'books/')
+  ]
+
+  const files = allObjects
     .map(obj => ({
       key:      obj.key,
       name:     parseName(obj.key),
@@ -57,8 +73,8 @@ export async function onRequestDelete({ request, env }) {
   const key = url.searchParams.get('key')
   if (!key) return json({ error: 'Missing key' }, 400)
 
-  // safety: only allow deleting from books/ prefix
-  if (!key.startsWith('books/')) return json({ error: 'Forbidden' }, 403)
+  // safety: block path traversal
+  if (key.includes('..')) return json({ error: 'Forbidden' }, 403)
 
   await env.R2.delete(key)
   return json({ ok: true })
