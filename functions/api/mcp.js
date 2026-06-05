@@ -97,8 +97,48 @@ const TOOLS = [
       },
       required: ['title']
     }
+  },
+  {
+    name: 'add_book',
+    description: 'เพิ่มหนังสือเข้า Digital Library (digital-library.uraree.com)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title:       { type: 'string', description: 'ชื่อหนังสือ' },
+        author:      { type: 'string', description: 'ชื่อผู้แต่ง (optional)' },
+        description: { type: 'string', description: 'คำอธิบายหนังสือ (optional)' },
+        category:    { type: 'string', description: 'หมวดหมู่ เช่น Medicine, Research, Anatomy (optional)' },
+        url:         { type: 'string', description: 'ลิงก์ดาวน์โหลดหรืออ่านออนไลน์ (optional)' },
+        url_label:   { type: 'string', description: 'ชื่อลิงก์ เช่น ดาวน์โหลด, อ่านออนไลน์ (optional, default: ดาวน์โหลด)' }
+      },
+      required: ['title']
+    }
+  },
+  {
+    name: 'search_books',
+    description: 'ค้นหาหนังสือใน Digital Library',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'คำค้นหา ชื่อหนังสือหรือผู้แต่ง' },
+        limit: { type: 'number', description: 'จำนวนผลลัพธ์สูงสุด (default: 5)' }
+      },
+      required: ['query']
+    }
   }
 ]
+
+async function pbAuth(env) {
+  const pbUrl = env.PB_URL || 'https://pb.uraree.com'
+  const res = await fetch(`${pbUrl}/api/admins/auth-with-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identity: env.PB_ADMIN_EMAIL, password: env.PB_ADMIN_PASSWORD })
+  })
+  if (!res.ok) throw new Error(`PocketBase auth failed: ${res.status}`)
+  const data = await res.json()
+  return { token: data.token, pbUrl }
+}
 
 async function handleTool(name, input, env) {
   const db = getDb(env)
@@ -194,6 +234,72 @@ async function handleTool(name, input, env) {
       }
     }
     return `📝 สร้าง note "${input.title}" แล้วค่ะ${tags.length ? ' tags: ' + tags.join(', ') : ''}\nURL: https://space.uraree.com`
+  }
+
+  if (name === 'add_book') {
+    const { token, pbUrl } = await pbAuth(env)
+    const headers = { 'Content-Type': 'application/json', 'Authorization': token }
+
+    // find or create category
+    let categoryId = null
+    if (input.category) {
+      const catFilter = encodeURIComponent(`name="${input.category}"`)
+      const catRes = await fetch(`${pbUrl}/api/collections/categories/records?filter=${catFilter}&perPage=1`, { headers })
+      const catData = await catRes.json()
+      if (catData.items?.length > 0) {
+        categoryId = catData.items[0].id
+      } else {
+        const newCat = await fetch(`${pbUrl}/api/collections/categories/records`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ name: input.category })
+        })
+        const newCatData = await newCat.json()
+        categoryId = newCatData.id
+      }
+    }
+
+    // create book record
+    const bookBody = {
+      title: input.title,
+      author: input.author || '',
+      description: input.description || '',
+      ...(categoryId && { category: categoryId })
+    }
+    const bookRes = await fetch(`${pbUrl}/api/collections/books/records`, {
+      method: 'POST', headers,
+      body: JSON.stringify(bookBody)
+    })
+    const book = await bookRes.json()
+    if (!bookRes.ok) throw new Error(`สร้างหนังสือไม่ได้: ${JSON.stringify(book)}`)
+
+    // create book_link if url provided
+    if (input.url) {
+      await fetch(`${pbUrl}/api/collections/book_links/records`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ book: book.id, url: input.url, label: input.url_label || 'ดาวน์โหลด' })
+      })
+    }
+
+    return `📚 เพิ่มหนังสือ "${input.title}"${input.author ? ' โดย ' + input.author : ''} เข้า Digital Library แล้วค่ะ${input.category ? ' (หมวด: ' + input.category + ')' : ''}${input.url ? ' 🔗' : ''}\nhttps://digital-library.uraree.com`
+  }
+
+  if (name === 'search_books') {
+    const pbUrl = env.PB_URL || 'https://pb.uraree.com'
+    const q = input.query
+    const limit = input.limit || 5
+    const filter = encodeURIComponent(`title~"${q}" || author~"${q}"`)
+    const res = await fetch(
+      `${pbUrl}/api/collections/books/records?filter=${filter}&perPage=${limit}&expand=category`,
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+    if (!res.ok) throw new Error(`ค้นหาไม่ได้: ${res.status}`)
+    const data = await res.json()
+    if (!data.items?.length) return `🔍 ไม่พบหนังสือที่ค้นหา "${q}"`
+    const lines = data.items.map(b => {
+      const cat = b.expand?.category?.name || ''
+      return `📖 ${b.title}${b.author ? ' — ' + b.author : ''}${cat ? ' [' + cat + ']' : ''}`
+    })
+    return `🔍 พบ ${data.items.length} รายการ สำหรับ "${q}":\n${lines.join('\n')}\nhttps://digital-library.uraree.com`
   }
 
   throw new Error(`Unknown tool: ${name}`)
