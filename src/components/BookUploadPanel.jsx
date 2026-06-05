@@ -151,6 +151,7 @@ export default function BookUploadPanel({ isMobile }) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState('')
+  const [uploadDone, setUploadDone] = useState(null) // { url, name, key, size, type }
   const [search, setSearch] = useState('')
   const inputRef = useRef()
 
@@ -176,7 +177,7 @@ export default function BookUploadPanel({ isMobile }) {
     try {
       const form = new FormData()
       form.append('file', f)
-      const url = await new Promise((resolve, reject) => {
+      const result = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.open('POST', '/api/upload')
         xhr.upload.onprogress = e => { if (e.lengthComputable) setProgress(Math.round(e.loaded / e.total * 100)) }
@@ -189,8 +190,8 @@ export default function BookUploadPanel({ isMobile }) {
       })
       await loadFiles()
       setShowUpload(false)
-      // select the newly uploaded file
-      setSelected({ name: f.name, url: url.url, type: detectTypeFromName(f.name), size: f.size, uploaded: new Date().toISOString() })
+      // show choice: keep in library OR add to digital-library
+      setUploadDone({ url: result.url, key: result.key, name: f.name, size: f.size, type: detectTypeFromName(f.name) })
     } catch (e) {
       setUploadError(e.message)
     } finally {
@@ -294,7 +295,56 @@ export default function BookUploadPanel({ isMobile }) {
               </div>
             )}
           </div>
-          {uploadError && <div style={{ marginTop: '8px', fontSize: '12px', color: '#DC2626' }}>{uploadError}</div>}
+              {uploadError && <div style={{ marginTop: '8px', fontSize: '12px', color: '#DC2626' }}>{uploadError}</div>}
+        </div>
+      )}
+
+      {/* Post-upload choice */}
+      {uploadDone && (
+        <div style={{
+          margin: '12px 16px', borderRadius: '14px', overflow: 'hidden',
+          border: '1px solid #9FE1CB', flexShrink: 0
+        }}>
+          <div style={{ padding: '12px 14px', background: '#E1F5EE', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <i className={`ti ${TYPE_ICON[uploadDone.type] || 'ti-file'}`}
+               style={{ fontSize: '18px', color: '#1D9E75', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: '600', color: '#085041' }}>อัปโหลดสำเร็จ</div>
+              <div style={{ fontSize: '11px', color: '#1D9E75', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {uploadDone.name} · {formatSize(uploadDone.size)}
+              </div>
+            </div>
+            <button onClick={() => setUploadDone(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1D9E75', padding: '2px', flexShrink: 0 }}>
+              <i className="ti ti-x" style={{ fontSize: '14px' }} />
+            </button>
+          </div>
+          <div style={{ padding: '12px 14px', background: 'var(--color-background-secondary)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', width: '100%', marginBottom: '4px' }}>
+              ต้องการทำอะไรกับไฟล์นี้?
+            </div>
+            <button
+              onClick={() => {
+                setSelected({ ...uploadDone, uploaded: new Date().toISOString() })
+                setUploadDone(null)
+              }}
+              style={{ ...btnStyle('var(--color-background-primary)', 'var(--color-text-primary)'), fontSize: '12px', flex: 1 }}
+            >
+              <i className="ti ti-eye" style={{ fontSize: '13px' }} />
+              เปิดอ่านใน Workspace
+            </button>
+            <button
+              onClick={() => {
+                const params = new URLSearchParams({ fileUrl: uploadDone.url, fileName: uploadDone.name })
+                window.open(`${DIGITAL_LIBRARY_URL}/admin/books/add?${params}`, '_blank')
+                setUploadDone(null)
+              }}
+              style={{ ...btnStyle('#1D9E75', 'white'), fontSize: '12px', flex: 1 }}
+            >
+              <i className="ti ti-books" style={{ fontSize: '13px' }} />
+              เพิ่มใน Digital Library
+            </button>
+          </div>
         </div>
       )}
 
