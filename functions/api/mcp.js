@@ -108,10 +108,33 @@ const TOOLS = [
         author:      { type: 'string', description: 'ชื่อผู้แต่ง (optional)' },
         description: { type: 'string', description: 'คำอธิบายหนังสือ (optional)' },
         category:    { type: 'string', description: 'หมวดหมู่ เช่น Medicine, Research, Anatomy (optional)' },
-        url:         { type: 'string', description: 'ลิงก์ดาวน์โหลดหรืออ่านออนไลน์ (optional)' },
-        url_label:   { type: 'string', description: 'ชื่อลิงก์ เช่น ดาวน์โหลด, อ่านออนไลน์ (optional, default: ดาวน์โหลด)' }
+        links: {
+          type: 'array',
+          description: 'ลิงก์ต่างๆ (YouTube, Google Drive, MEGA, ฯลฯ) — label จะ auto-detect จาก URL',
+          items: {
+            type: 'object',
+            properties: {
+              url:   { type: 'string', description: 'URL ลิงก์' },
+              label: { type: 'string', description: 'ชื่อลิงก์ (optional — auto-detect ได้)' }
+            },
+            required: ['url']
+          }
+        }
       },
       required: ['title']
+    }
+  },
+  {
+    name: 'add_book_link',
+    description: 'เพิ่มลิงก์ให้หนังสือที่มีอยู่แล้วใน Digital Library',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        book_title: { type: 'string', description: 'ชื่อหนังสือที่ต้องการเพิ่มลิงก์' },
+        url:        { type: 'string', description: 'URL ลิงก์ (YouTube, Google Drive, MEGA, ฯลฯ)' },
+        label:      { type: 'string', description: 'ชื่อลิงก์ (optional — auto-detect จาก URL)' }
+      },
+      required: ['book_title', 'url']
     }
   },
   {
@@ -127,6 +150,20 @@ const TOOLS = [
     }
   }
 ]
+
+function detectLinkLabel(url) {
+  if (/youtube\.com|youtu\.be/.test(url))        return 'YouTube'
+  if (/drive\.google\.com/.test(url))            return 'Google Drive'
+  if (/docs\.google\.com/.test(url))             return 'Google Docs'
+  if (/mega\.nz|mega\.co\.nz/.test(url))         return 'MEGA'
+  if (/dropbox\.com/.test(url))                  return 'Dropbox'
+  if (/github\.com/.test(url))                   return 'GitHub'
+  if (/onedrive\.live\.com|1drv\.ms/.test(url))  return 'OneDrive'
+  if (/mediafire\.com/.test(url))                return 'MediaFire'
+  if (/archive\.org/.test(url))                  return 'Archive.org'
+  if (/\.(pdf)(\?|$)/i.test(url))               return 'ดาวน์โหลด PDF'
+  return 'ดาวน์โหลด'
+}
 
 async function pbAuth(env) {
   const pbUrl = env.PB_URL || 'https://pb.uraree.com'
@@ -272,15 +309,37 @@ async function handleTool(name, input, env) {
     const book = await bookRes.json()
     if (!bookRes.ok) throw new Error(`สร้างหนังสือไม่ได้: ${JSON.stringify(book)}`)
 
-    // create book_link if url provided
-    if (input.url) {
+    // create book_links
+    const links = Array.isArray(input.links) ? input.links : []
+    for (const link of links) {
       await fetch(`${pbUrl}/api/collections/book_links/records`, {
         method: 'POST', headers,
-        body: JSON.stringify({ book: book.id, url: input.url, label: input.url_label || 'ดาวน์โหลด' })
+        body: JSON.stringify({ book: book.id, url: link.url, label: link.label || detectLinkLabel(link.url) })
       })
     }
 
-    return `📚 เพิ่มหนังสือ "${input.title}"${input.author ? ' โดย ' + input.author : ''} เข้า Digital Library แล้วค่ะ${input.category ? ' (หมวด: ' + input.category + ')' : ''}${input.url ? ' 🔗' : ''}\nhttps://digital-library.uraree.com`
+    const linkSummary = links.map(l => `🔗 ${l.label || detectLinkLabel(l.url)}`).join(' ')
+    return `📚 เพิ่มหนังสือ "${input.title}"${input.author ? ' โดย ' + input.author : ''} เข้า Digital Library แล้วค่ะ${input.category ? ' (หมวด: ' + input.category + ')' : ''}${linkSummary ? '\n' + linkSummary : ''}\nhttps://digital-library.uraree.com`
+  }
+
+  if (name === 'add_book_link') {
+    const { token, pbUrl } = await pbAuth(env)
+    const headers = { 'Content-Type': 'application/json', 'Authorization': token }
+
+    // find book by title
+    const filter = encodeURIComponent(`title~"${input.book_title}"`)
+    const res = await fetch(`${pbUrl}/api/collections/books/records?filter=${filter}&perPage=1`, { headers })
+    const data = await res.json()
+    if (!data.items?.length) throw new Error(`ไม่พบหนังสือ "${input.book_title}" ในระบบ`)
+
+    const book = data.items[0]
+    const label = input.label || detectLinkLabel(input.url)
+    await fetch(`${pbUrl}/api/collections/book_links/records`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ book: book.id, url: input.url, label })
+    })
+
+    return `🔗 เพิ่มลิงก์ ${label} ให้หนังสือ "${book.title}" แล้วค่ะ\nhttps://digital-library.uraree.com`
   }
 
   if (name === 'search_books') {
