@@ -147,6 +147,27 @@ async function githubPut(env, path, content, sha, message) {
   return res.json()
 }
 
+async function githubDelete(env, path, sha, message) {
+  const res = await fetch(
+    `https://api.github.com/repos/${env.GITHUB_OWNER}/${env.GITHUB_REPO}/contents/${path}`,
+    {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github.v3+json',
+        'User-Agent': 'workspace-app',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: message || 'Remove old synced note path',
+        sha
+      })
+    }
+  )
+  if (!res.ok) throw new Error(`GitHub ${res.status}: ${await res.text()}`)
+  return res.json()
+}
+
 // ── route handlers ────────────────────────────────────────────────────────────
 
 // POST /api/obsidian/:id  → push note → GitHub
@@ -166,13 +187,11 @@ export async function onRequestPost({ params, env }) {
     )
     note.blocks = blocks.map(b => ({ ...b, done: b.done === '1' || b.done === 1 }))
 
-    // Determine file path (stable once created)
-    let filePath = note.obsidian_path
-    if (!filePath) {
-      const slug = slugify(note.title)
-      const shortId = params.id.slice(0, 8)
-      filePath = `workspace/${slug}-${shortId}.md`
-    }
+    const slug = slugify(note.title)
+    const shortId = params.id.slice(0, 8)
+    const desiredPath = `workspace/${slug}-${shortId}.md`
+    const previousPath = note.obsidian_path || null
+    const filePath = desiredPath
 
     // Get existing SHA (needed for update)
     const existing = await githubGet(env, filePath)
@@ -182,6 +201,14 @@ export async function onRequestPost({ params, env }) {
     const markdown = noteToMarkdown(note)
     const result = await githubPut(env, filePath, markdown, sha, `Update: ${note.title}`)
     const newSha = result.content?.sha
+
+    // If the title changed and the note moved, remove the old GitHub file.
+    if (previousPath && previousPath !== filePath) {
+      const previous = await githubGet(env, previousPath)
+      if (previous?.sha) {
+        await githubDelete(env, previousPath, previous.sha, `Rename note: ${note.title}`)
+      }
+    }
 
     // Save sync state to Turso
     const now = Date.now()
