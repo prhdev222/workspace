@@ -88,7 +88,6 @@ const STARTER_TEMPLATES = [
   }
 ]
 
-const DRAW_COLORS = ['#173B33', '#1D9E75', '#185FA5', '#E24B4A', '#854F0B', '#111827']
 const IMAGE_TRIM_PADDING = 24
 
 // ─── tree / sort helpers ─────────────────────────────────────────────────────
@@ -211,15 +210,6 @@ function execLink(url) {
   document.querySelectorAll('[contenteditable] a').forEach(a => {
     a.target = '_blank'; a.rel = 'noopener noreferrer'
   })
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
 }
 
 function clampImageWidth(value) {
@@ -663,195 +653,6 @@ function SlashMenu({ position, query, onSelect, onClose, isMobile }) {
   )
 }
 
-// ─── DrawingPad ──────────────────────────────────────────────────────────────
-
-function DrawingPad({ isMobile, focusMode = false, noteTags = [], onInsert, onCancel }) {
-  const canvasRef = useRef()
-  const drawingRef = useRef(false)
-  const [color, setColor] = useState(DRAW_COLORS[0])
-  const [size, setSize] = useState(4)
-  const [label, setLabel] = useState('')
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const width = Math.min(840, Math.max(300, canvas.parentElement?.clientWidth || 640))
-    const height = focusMode ? Math.max(420, window.innerHeight - 340) : isMobile ? 300 : 360
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = width * dpr
-    canvas.height = height * dpr
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${height}px`
-
-    const ctx = canvas.getContext('2d')
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(0, 0, width, height)
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-  }, [isMobile, focusMode])
-
-  function getPoint(e) {
-    const rect = canvasRef.current.getBoundingClientRect()
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top }
-  }
-
-  function startDrawing(e) {
-    e.preventDefault()
-    const canvas = canvasRef.current
-    if (!canvas) return
-    canvas.setPointerCapture?.(e.pointerId)
-    const ctx = canvas.getContext('2d')
-    const p = getPoint(e)
-    drawingRef.current = true
-    ctx.beginPath()
-    ctx.moveTo(p.x, p.y)
-  }
-
-  function draw(e) {
-    if (!drawingRef.current) return
-    e.preventDefault()
-    const ctx = canvasRef.current.getContext('2d')
-    const p = getPoint(e)
-    ctx.strokeStyle = color
-    ctx.lineWidth = size
-    ctx.lineTo(p.x, p.y)
-    ctx.stroke()
-  }
-
-  function stopDrawing(e) {
-    drawingRef.current = false
-    canvasRef.current?.releasePointerCapture?.(e.pointerId)
-  }
-
-  function clearCanvas() {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const ctx = canvas.getContext('2d')
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(0, 0, rect.width, rect.height)
-  }
-
-  function insertDrawing() {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const trimmed = trimCanvasToContent(canvas)
-    onInsert(trimmed.toDataURL('image/png'), label.trim())
-  }
-
-  return (
-    <div style={{
-      border: '0.5px solid #9FE1CB',
-      background: 'linear-gradient(180deg, #F5FFFB 0%, #FFFFFF 100%)',
-      borderRadius: '16px',
-      padding: isMobile ? '12px' : '14px',
-      marginBottom: '16px',
-      boxShadow: '0 10px 30px rgba(8,80,65,0.08)'
-    }}>
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#085041', fontSize: '13px', fontWeight: '700' }}>
-          <i className="ti ti-pencil" style={{ fontSize: '16px' }} />
-          Draw in note
-        </div>
-        <input
-          value={label}
-          onChange={e => setLabel(e.target.value)}
-          placeholder="Drawing tag / label"
-          style={{
-            flex: '1 1 180px',
-            minWidth: 0,
-            padding: '8px 10px',
-            border: '0.5px solid var(--color-border-secondary)',
-            borderRadius: '9px',
-            background: 'var(--color-background-primary)',
-            color: 'var(--color-text-primary)',
-            outline: 'none',
-            fontSize: '12px',
-            fontFamily: 'inherit'
-          }}
-        />
-        {noteTags.slice(0, 4).map(tag => (
-          <button
-            key={tag}
-            type="button"
-            onClick={() => setLabel(tag)}
-            style={{
-              padding: '6px 9px',
-              borderRadius: '999px',
-              border: '0.5px solid #1D9E7540',
-              background: label === tag ? '#E1F5EE' : '#FFFFFF',
-              color: '#085041',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontWeight: '600',
-              fontFamily: 'inherit'
-            }}
-          >
-            #{tag}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ overflowX: 'auto', borderRadius: '12px', border: '0.5px solid var(--color-border-secondary)', background: '#FFFFFF' }}>
-        <canvas
-          ref={canvasRef}
-          onPointerDown={startDrawing}
-          onPointerMove={draw}
-          onPointerUp={stopDrawing}
-          onPointerCancel={stopDrawing}
-          onPointerLeave={stopDrawing}
-          style={{
-            display: 'block',
-            maxWidth: '100%',
-            touchAction: 'none',
-            cursor: 'crosshair'
-          }}
-        />
-      </div>
-
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', marginTop: '12px' }}>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          {DRAW_COLORS.map(c => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setColor(c)}
-              title={c}
-              style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '999px',
-                border: color === c ? '2px solid #085041' : '1px solid rgba(0,0,0,0.12)',
-                background: c,
-                cursor: 'pointer'
-              }}
-            />
-          ))}
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-          Size
-          <input type="range" min="2" max="16" value={size} onChange={e => setSize(Number(e.target.value))} />
-        </label>
-        <div style={{ flex: 1 }} />
-        <button type="button" onClick={clearCanvas}
-          style={{ padding: '8px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: '#FFFFFF', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit' }}>
-          Clear
-        </button>
-        <button type="button" onClick={onCancel}
-          style={{ padding: '8px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: '#FFFFFF', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit' }}>
-          Cancel
-        </button>
-        <button type="button" onClick={insertDrawing}
-          style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#1D9E75', color: '#FFFFFF', cursor: 'pointer', fontSize: '12px', fontWeight: '700', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <i className="ti ti-plus" /> Insert drawing
-        </button>
-      </div>
-    </div>
-  )
-}
-
 // ─── RichBlock ───────────────────────────────────────────────────────────────
 
 function RichBlock({
@@ -1134,7 +935,6 @@ export default function NotesPanel({
   const [sidebarHidden, setSidebarHidden] = useState(false)
   const [metaHidden, setMetaHidden] = useState(false)
   const [activeBlockIdx, setActiveBlockIdx] = useState(null)
-  const [drawingOpen, setDrawingOpen] = useState(false)
   const [focusToolsHidden, setFocusToolsHidden] = useState(false)
   const triggerLinkRef = useRef(null)
   const titleRef = useRef()
@@ -1162,9 +962,8 @@ export default function NotesPanel({
       setBlocks((note.blocks || []).map(b => ({ ...b, text: b.content || b.text || '' })))
       setParentId(note.parent_id || ''); setMobileMoveTargetId(note.parent_id || '')
       setDirty(false); setLastSavedAt(null)
-      setDrawingOpen(false)
       setFocusToolsHidden(false)
-    } else { setTitle(''); setTags([]); setBlocks([]); setParentId(''); setMobileMoveTargetId(''); setDirty(false); setLastSavedAt(null); setDrawingOpen(false); setFocusToolsHidden(false) }
+    } else { setTitle(''); setTags([]); setBlocks([]); setParentId(''); setMobileMoveTargetId(''); setDirty(false); setLastSavedAt(null); setFocusToolsHidden(false) }
   }, [currentId, note])
 
   useEffect(() => { setSearch(externalSearch) }, [externalSearch])
@@ -1348,24 +1147,6 @@ export default function NotesPanel({
 
   function insertImageBlock(dataUrl) {
     setBlocks(prev => [...prev, { id: crypto.randomUUID(), type: 'image', text: dataUrl, done: false }])
-    setDirty(true)
-  }
-
-  function insertDrawingBlock(dataUrl, label) {
-    setBlocks(prev => {
-      const next = [...prev]
-      if (label) {
-        next.push({
-          id: crypto.randomUUID(),
-          type: 'text',
-          text: `<strong>Drawing:</strong> ${escapeHtml(label)}`,
-          done: false
-        })
-      }
-      next.push({ id: crypto.randomUUID(), type: 'image', text: dataUrl, done: false })
-      return next
-    })
-    setDrawingOpen(false)
     setDirty(true)
   }
 
@@ -1758,11 +1539,6 @@ export default function NotesPanel({
                   <span style={{ textTransform: 'capitalize', fontSize: '11px' }}>{type}</span>
                 </button>
               ))}
-              <button onClick={() => setDrawingOpen(true)} disabled={!currentId}
-                style={{ padding: '4px 8px', border: '0.5px solid #1D9E7540', background: '#F0FBF7', color: '#085041', cursor: currentId ? 'pointer' : 'not-allowed', borderRadius: '6px', fontSize: '12px', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <i className="ti ti-pencil" />
-                <span style={{ fontSize: '11px' }}>Draw</span>
-              </button>
               <div style={{ flex: 1 }} />
               <button onClick={() => setShowShortcuts(true)} title="Keyboard shortcuts"
                 style={{ padding: '4px 8px', border: '0.5px solid var(--color-border-tertiary)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', borderRadius: '6px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1926,10 +1702,6 @@ export default function NotesPanel({
                       style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
                       <i className="ti ti-photo-plus" /> Picture
                     </button>
-                    <button onClick={() => setDrawingOpen(true)}
-                      style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid #1D9E7540', background: drawingOpen ? '#E1F5EE' : 'var(--color-background-secondary)', color: '#085041', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
-                      <i className="ti ti-pencil" /> Draw
-                    </button>
                     <button onClick={handleCreateSubpage}
                       style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
                       <i className="ti ti-indent-increase" /> Subpage
@@ -2013,10 +1785,6 @@ export default function NotesPanel({
                         style={{ padding: '7px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <i className="ti ti-photo-plus" /> Picture
                       </button>
-                      <button onClick={() => setDrawingOpen(true)}
-                        style={{ padding: '7px 10px', borderRadius: '8px', border: '0.5px solid #1D9E7540', background: drawingOpen ? '#E1F5EE' : 'var(--color-background-primary)', color: '#085041', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
-                        <i className="ti ti-pencil" /> Draw
-                      </button>
                       <button onClick={handleCreateSubpage}
                         style={{ padding: '7px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <i className="ti ti-indent-increase" /> Subpage
@@ -2085,15 +1853,6 @@ export default function NotesPanel({
 
                 {/* linked items */}
                 <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} isMobile={true} />
-                {drawingOpen && (
-                  <DrawingPad
-                    isMobile={isMobile}
-                    focusMode={mobileFocusMode}
-                    noteTags={tags}
-                    onInsert={insertDrawingBlock}
-                    onCancel={() => setDrawingOpen(false)}
-                  />
-                )}
                 <div style={{ marginTop: '16px' }}>
                   {blocks.length === 0 && (
                     <div style={{ padding: isMobile ? '14px 0 6px' : '18px 0 8px' }}>

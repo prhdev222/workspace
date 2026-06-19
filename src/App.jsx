@@ -5,12 +5,13 @@ import NotesPanel from './components/NotesPanel'
 import TodoPanel from './components/TodoPanel'
 import MindMapPanel from './components/MindMapPanel'
 import IdeasPanel from './components/IdeasPanel'
+import DrawingsPanel from './components/DrawingsPanel'
 import ProjectsPanel from './components/ProjectsPanel'
 import PublicProjectPage from './components/PublicProjectPage'
 import AIAssistant from './components/AIAssistant'
 import DailyBriefing from './components/DailyBriefing'
 import BookUploadPanel from './components/BookUploadPanel'
-import { getNotes, getTodos, getIdeas, getMindMaps, getLinks, getProjects, getLibraryFiles, createNote, deleteTodo, logout } from './lib/api'
+import { getNotes, getTodos, getIdeas, getDrawings, getMindMaps, getLinks, getProjects, getLibraryFiles, createNote, deleteTodo, logout } from './lib/api'
 
 const STALE_TODO_TEXTS = new Set([
   'อ่าน Anorexia paper 📄 ไฟล์อยู่: Obsidian/Notes/anorexia.pdf (sync แล้ว)'
@@ -21,6 +22,7 @@ const VIEWS = [
   { id: 'todo',    label: 'To-Do',    icon: 'ti-check' },
   { id: 'mindmap', label: 'Diagrams', icon: 'ti-chart-arrows' },
   { id: 'ideas',   label: 'Ideas',    icon: 'ti-bulb' },
+  { id: 'drawings', label: 'Draw',     icon: 'ti-pencil' },
   { id: 'projects', label: 'Projects', icon: 'ti-world-share' },
   { id: 'library', label: 'Library',  icon: 'ti-books' },
 ]
@@ -32,6 +34,7 @@ export default function App() {
   const [notes, setNotes] = useState([])
   const [todos, setTodos] = useState([])
   const [ideas, setIdeas] = useState([])
+  const [drawings, setDrawings] = useState([])
   const [mindMaps, setMindMaps] = useState([])
   const [projects, setProjects] = useState([])
   const [libraryFiles, setLibraryFiles] = useState([])
@@ -74,6 +77,12 @@ export default function App() {
       })
     getMindMaps()
       .then(setMindMaps)
+      .catch(err => {
+        if (err?.status === 401) setAuthed(false)
+        else console.error(err)
+      })
+    getDrawings()
+      .then(setDrawings)
       .catch(err => {
         if (err?.status === 401) setAuthed(false)
         else console.error(err)
@@ -140,8 +149,8 @@ export default function App() {
     const data = await getNotes()
     setNotes(data)
     setCurrentNoteId(data[0]?.id || null)
-    const [td, id, mm, lk, pr, lf] = await Promise.all([getTodos(), getIdeas(), getMindMaps(), getLinks(), getProjects(), getLibraryFiles()])
-    setTodos(td); setIdeas(id); setMindMaps(mm); setLinks(lk)
+    const [td, id, dr, mm, lk, pr, lf] = await Promise.all([getTodos(), getIdeas(), getDrawings(), getMindMaps(), getLinks(), getProjects(), getLibraryFiles()])
+    setTodos(td); setIdeas(id); setDrawings(dr); setMindMaps(mm); setLinks(lk)
     setProjects(pr)
     setLibraryFiles(lf.files || [])
     setAuthed(true)
@@ -151,7 +160,7 @@ export default function App() {
   async function handleLogout() {
     await logout()
     setAuthed(false)
-    setNotes([]); setTodos([]); setIdeas([]); setMindMaps([]); setLinks([]); setProjects([]); setLibraryFiles([])
+    setNotes([]); setTodos([]); setIdeas([]); setDrawings([]); setMindMaps([]); setLinks([]); setProjects([]); setLibraryFiles([])
   }
 
   async function handleNewNote(parentId = null) {
@@ -216,6 +225,10 @@ export default function App() {
     return [item.title, item.content].join(' ').toLowerCase()
   }
 
+  function drawingSearchText(item) {
+    return [item.label, ...(item.tags || [])].join(' ').toLowerCase()
+  }
+
   const globalResults = normalizedSearch
     ? [
         ...notes
@@ -230,6 +243,10 @@ export default function App() {
           .filter(idea => ideaSearchText(idea).includes(normalizedSearch))
           .slice(0, 4)
           .map(idea => ({ id: `idea-${idea.id}`, type: 'ideas', title: idea.content, subtitle: `${idea.emoji || '💡'} ${idea.color || 'idea'}`, targetId: idea.id })),
+        ...drawings
+          .filter(item => drawingSearchText(item).includes(normalizedSearch))
+          .slice(0, 4)
+          .map(item => ({ id: `drawing-${item.id}`, type: 'drawings', title: item.label || 'Untitled drawing', subtitle: (item.tags || []).map(tag => `#${tag}`).join(' '), targetId: item.id })),
         ...mindMaps
           .filter(item => mindMapSearchText(item).includes(normalizedSearch))
           .slice(0, 4)
@@ -428,7 +445,7 @@ export default function App() {
           <div style={{ display: 'flex', gap: isMobile ? '6px' : '0', flexDirection: isMobile ? 'column' : 'column', minWidth: 0 }}>
             {VIEWS.map(v => {
               const isActive = view === v.id
-              const badge = v.id === 'todo' ? totalTodos - noteDone : v.id === 'notes' ? notes.length : v.id === 'ideas' ? ideas.length : v.id === 'projects' ? projects.length : null
+              const badge = v.id === 'todo' ? totalTodos - noteDone : v.id === 'notes' ? notes.length : v.id === 'ideas' ? ideas.length : v.id === 'drawings' ? drawings.length : v.id === 'projects' ? projects.length : null
               return (
                 <div key={v.id} onClick={() => { setView(v.id); setMobileMenuOpen(false) }} style={{
                   display: 'flex', alignItems: 'center', gap: '8px', padding: isMobile ? '9px 10px' : '7px 8px',
@@ -500,14 +517,15 @@ export default function App() {
             externalSearch={globalSearch}
             links={links}
             setLinks={setLinks}
-            entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }}
+            entities={{ notes, todos, ideas, drawings, mindMaps, projects, libraryFiles }}
             onNavigate={navigateToEntity}
           />
         )}
-        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} selectedTodoId={selectedTodoId} setSelectedTodoId={setSelectedTodoId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
-        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
-        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} selectedIdeaId={selectedIdeaId} setSelectedIdeaId={setSelectedIdeaId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
-        {view === 'projects' && <ProjectsPanel projects={projects} setProjects={setProjects} entities={{ notes, todos, ideas, mindMaps, libraryFiles }} isMobile={isMobile} onNavigate={navigateToEntity} />}
+        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} selectedTodoId={selectedTodoId} setSelectedTodoId={setSelectedTodoId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, drawings, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
+        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, drawings, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
+        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} selectedIdeaId={selectedIdeaId} setSelectedIdeaId={setSelectedIdeaId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, drawings, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
+        {view === 'drawings' && <DrawingsPanel drawings={drawings} setDrawings={setDrawings} isMobile={isMobile} externalSearch={globalSearch} />}
+        {view === 'projects' && <ProjectsPanel projects={projects} setProjects={setProjects} entities={{ notes, todos, ideas, drawings, mindMaps, libraryFiles }} isMobile={isMobile} onNavigate={navigateToEntity} />}
         {view === 'library' && <BookUploadPanel isMobile={isMobile} />}
       </div>
     </div>

@@ -53,6 +53,13 @@ export async function onRequestGet({ env }) {
         image_url TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL
       )`,
+      `CREATE TABLE IF NOT EXISTS drawings (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]',
+        image_url TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )`,
       `CREATE TABLE IF NOT EXISTS mindmaps (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,

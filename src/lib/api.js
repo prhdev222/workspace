@@ -42,6 +42,11 @@ export const getIdeas = () => req('GET', '/ideas')
 export const createIdea = (data) => req('POST', '/ideas', data)
 export const deleteIdea = (id) => req('DELETE', `/ideas/${id}`)
 
+// Drawings
+export const getDrawings = () => req('GET', '/drawings')
+export const createDrawing = (data) => req('POST', '/drawings', data)
+export const deleteDrawing = (id) => req('DELETE', `/drawings/${id}`)
+
 // Mind maps
 export const getMindMaps = () => req('GET', '/mindmaps')
 export const createMindMap = (data) => req('POST', '/mindmaps', data)
