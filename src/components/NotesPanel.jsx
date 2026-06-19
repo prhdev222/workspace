@@ -574,7 +574,7 @@ function SlashMenu({ position, query, onSelect, onClose, isMobile }) {
 
 // ─── DrawingPad ──────────────────────────────────────────────────────────────
 
-function DrawingPad({ isMobile, noteTags = [], onInsert, onCancel }) {
+function DrawingPad({ isMobile, focusMode = false, noteTags = [], onInsert, onCancel }) {
   const canvasRef = useRef()
   const drawingRef = useRef(false)
   const [color, setColor] = useState(DRAW_COLORS[0])
@@ -586,7 +586,7 @@ function DrawingPad({ isMobile, noteTags = [], onInsert, onCancel }) {
     if (!canvas) return
 
     const width = Math.min(840, Math.max(300, canvas.parentElement?.clientWidth || 640))
-    const height = isMobile ? 300 : 360
+    const height = focusMode ? Math.max(420, window.innerHeight - 340) : isMobile ? 300 : 360
     const dpr = window.devicePixelRatio || 1
     canvas.width = width * dpr
     canvas.height = height * dpr
@@ -599,7 +599,7 @@ function DrawingPad({ isMobile, noteTags = [], onInsert, onCancel }) {
     ctx.fillRect(0, 0, width, height)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-  }, [isMobile])
+  }, [isMobile, focusMode])
 
   function getPoint(e) {
     const rect = canvasRef.current.getBoundingClientRect()
@@ -1731,6 +1731,43 @@ export default function NotesPanel({
 
                 <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
 
+                {isMobile && mobileFocusMode && (
+                  <div style={{
+                    display: 'grid',
+                    gap: '10px',
+                    padding: '10px 0 12px',
+                    marginBottom: '14px',
+                    borderTop: '0.5px solid var(--color-border-tertiary)',
+                    borderBottom: '0.5px solid var(--color-border-tertiary)'
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', paddingBottom: '2px' }}>
+                      <button onClick={() => imageInputRef.current?.click()}
+                        style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+                        <i className="ti ti-photo-plus" /> Picture
+                      </button>
+                      <button onClick={() => setDrawingOpen(true)}
+                        style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid #1D9E7540', background: drawingOpen ? '#E1F5EE' : 'var(--color-background-secondary)', color: '#085041', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
+                        <i className="ti ti-pencil" /> Draw
+                      </button>
+                      <button onClick={handleCreateSubpage}
+                        style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+                        <i className="ti ti-indent-increase" /> Subpage
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', paddingBottom: '2px' }}>
+                      {Object.entries(TAG_STYLES).map(([tag, s]) => (
+                        <button key={tag} onClick={() => toggleTag(tag)}
+                          style={{ flex: '0 0 auto', padding: '6px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', background: tags.includes(tag) ? s.bg : 'var(--color-background-secondary)', color: tags.includes(tag) ? s.color : 'var(--color-text-tertiary)', border: `0.5px solid ${tags.includes(tag) ? s.color + '44' : 'var(--color-border-secondary)'}`, fontFamily: 'inherit' }}>
+                          {s.label}
+                        </button>
+                      ))}
+                      <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center' }}>
+                        <EmojiChips emojis={QUICK_EMOJIS.slice(0, 6)} onPick={insertEmoji} compact />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {!(isMobile && mobileFocusMode) && (
                   <div style={{
                     display: 'grid',
@@ -1821,6 +1858,7 @@ export default function NotesPanel({
                 {drawingOpen && (
                   <DrawingPad
                     isMobile={isMobile}
+                    focusMode={mobileFocusMode}
                     noteTags={tags}
                     onInsert={insertDrawingBlock}
                     onCancel={() => setDrawingOpen(false)}
