@@ -12,6 +12,14 @@ function json(data, status = 200) {
   })
 }
 
+async function ensureNoteColumns(db) {
+  const { rows: columns } = await db.execute('PRAGMA table_info(notes)')
+  const names = new Set(columns.map(column => column.name))
+  if (!names.has('obsidian_auto_sync')) {
+    await db.execute('ALTER TABLE notes ADD COLUMN obsidian_auto_sync INTEGER NOT NULL DEFAULT 0')
+  }
+}
+
 async function getDescendantIds(db, rootId) {
   const ids = [rootId]
   let cursor = 0
@@ -31,6 +39,7 @@ async function getDescendantIds(db, rootId) {
 export async function onRequestGet({ params, env }) {
   try {
     const db = getDb(env)
+    await ensureNoteColumns(db)
     const { rows: notes } = await db.execute('SELECT * FROM notes WHERE id = ?', [params.id])
     if (!notes.length) return json({ error: 'Not found' }, 404)
 
@@ -53,6 +62,7 @@ export async function onRequestGet({ params, env }) {
 export async function onRequestPut({ params, request, env }) {
   try {
     const db = getDb(env)
+    await ensureNoteColumns(db)
     const body = await request.json()
     const now = Date.now()
     const nextParentId = body.parent_id || null
@@ -114,6 +124,7 @@ export async function onRequestPut({ params, request, env }) {
 export async function onRequestDelete({ params, env }) {
   try {
     const db = getDb(env)
+    await ensureNoteColumns(db)
     const ids = await getDescendantIds(db, params.id)
 
     for (const id of ids) {

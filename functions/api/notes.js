@@ -11,9 +11,18 @@ function json(data, status = 200) {
   })
 }
 
+async function ensureNoteColumns(db) {
+  const { rows: columns } = await db.execute('PRAGMA table_info(notes)')
+  const names = new Set(columns.map(column => column.name))
+  if (!names.has('obsidian_auto_sync')) {
+    await db.execute('ALTER TABLE notes ADD COLUMN obsidian_auto_sync INTEGER NOT NULL DEFAULT 0')
+  }
+}
+
 export async function onRequestGet({ env }) {
   try {
     const db = getDb(env)
+    await ensureNoteColumns(db)
     const { rows: notes } = await db.execute(
       'SELECT * FROM notes ORDER BY sort_order ASC, created_at ASC'
     )
@@ -38,6 +47,7 @@ export async function onRequestGet({ env }) {
 export async function onRequestPost({ request, env }) {
   try {
     const db = getDb(env)
+    await ensureNoteColumns(db)
     const body = await request.json()
     const id = crypto.randomUUID()
     const now = Date.now()

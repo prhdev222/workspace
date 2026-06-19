@@ -12,6 +12,14 @@ function json(data, status = 200) {
   })
 }
 
+async function ensureNoteColumns(db) {
+  const { rows: columns } = await db.execute('PRAGMA table_info(notes)')
+  const names = new Set(columns.map(column => column.name))
+  if (!names.has('obsidian_auto_sync')) {
+    await db.execute('ALTER TABLE notes ADD COLUMN obsidian_auto_sync INTEGER NOT NULL DEFAULT 0')
+  }
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function stripHtml(html) {
@@ -268,6 +276,7 @@ export async function onRequestGet({ params, env }) {
 export async function onRequestDelete({ params, env }) {
   try {
     const db = getDb(env)
+    await ensureNoteColumns(db)
     await db.execute(
       'UPDATE notes SET obsidian_synced = 0, obsidian_auto_sync = 0, obsidian_path = NULL, obsidian_sha = NULL, obsidian_synced_at = NULL WHERE id = ?',
       [params.id]
