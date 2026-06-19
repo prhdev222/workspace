@@ -11,13 +11,16 @@ export async function onRequestPost({ request, env }) {
     }
 
     const token = env.SESSION_SECRET
+    const maxAge = 60 * 60 * 24 * 30 // 30 days
+    const isHttps = new URL(request.url).protocol === 'https:'
     const cookie = [
       `ws_session=${token}`,
       'HttpOnly',
+      isHttps ? 'Secure' : '',
       'SameSite=Strict',
       'Path=/',
-      'Max-Age=86400' // 1 day
-    ].join('; ')
+      `Max-Age=${maxAge}`
+    ].filter(Boolean).join('; ')
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,

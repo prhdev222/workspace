@@ -20,6 +20,14 @@ function urlLabel(url) {
 
 function today() { return new Date().toISOString().slice(0, 10) }
 
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value || '')
+}
+
+function getTaskDate(task) {
+  return task.start_date || task.due_date || (isIsoDate(task.due_label) ? task.due_label : null)
+}
+
 function formatDate(d) {
   if (!d) return ''
   const diff = Math.round((new Date(d + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 86400000)
@@ -37,7 +45,7 @@ function greet() {
   return 'สวัสดีตอนเย็น 🌙'
 }
 
-export default function DailyBriefing({ todos, onClose }) {
+export default function DailyBriefing({ todos, onClose, onDeleteTodo }) {
   const todayStr = today()
   const isMobile = window.innerWidth <= 640
 
@@ -50,8 +58,11 @@ export default function DailyBriefing({ todos, onClose }) {
       .filter(t => { const k = `${t.start_date}|${t.text}`; if (seen.has(k)) return false; seen.add(k); return true })
       .slice(0, 5)
     const tasks = pending
-      .filter(t => t.item_type !== 'appointment' && t.item_type !== 'health' &&
-        (t.due_label === 'today' || t.due_date === todayStr || t.section === 'today'))
+      .filter(t => {
+        if (t.item_type === 'appointment' || t.item_type === 'health') return false
+        const taskDate = getTaskDate(t)
+        return taskDate ? taskDate === todayStr : (t.due_label === 'today' || t.section === 'today')
+      })
       .slice(0, 6)
     return { appointments, tasks }
   }, [todos])
@@ -193,7 +204,7 @@ export default function DailyBriefing({ todos, onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {tasks.map(t => (
                 <div key={t.id} style={{
-                  padding: '9px 12px', borderRadius: '10px',
+                  padding: '9px 10px 9px 12px', borderRadius: '10px',
                   background: 'var(--color-background-secondary)',
                   border: '0.5px solid var(--color-border-tertiary)',
                   display: 'flex', alignItems: 'center', gap: '8px',
@@ -205,6 +216,38 @@ export default function DailyBriefing({ todos, onClose }) {
                     wordBreak: 'break-word', overflowWrap: 'break-word' }}>
                     {t.text}
                   </div>
+                  {onDeleteTodo && (
+                    <button
+                      type="button"
+                      aria-label={`Delete ${t.text}`}
+                      title="Delete"
+                      onClick={async e => {
+                        e.stopPropagation()
+                        await onDeleteTodo(t.id)
+                      }}
+                      style={{
+                        minWidth: '58px',
+                        height: '30px',
+                        padding: '0 10px',
+                        borderRadius: '8px',
+                        border: '0.5px solid #F3B4B4',
+                        background: '#FCEBEB',
+                        color: '#A32D2D',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        fontFamily: 'inherit',
+                        flexShrink: 0
+                      }}
+                    >
+                      <i className="ti ti-trash" style={{ fontSize: '13px' }} />
+                      ลบ
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

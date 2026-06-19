@@ -5,26 +5,36 @@ import NotesPanel from './components/NotesPanel'
 import TodoPanel from './components/TodoPanel'
 import MindMapPanel from './components/MindMapPanel'
 import IdeasPanel from './components/IdeasPanel'
+import ProjectsPanel from './components/ProjectsPanel'
+import PublicProjectPage from './components/PublicProjectPage'
 import AIAssistant from './components/AIAssistant'
 import DailyBriefing from './components/DailyBriefing'
 import BookUploadPanel from './components/BookUploadPanel'
-import { getNotes, getTodos, getIdeas, getMindMaps, getLinks, createNote, logout } from './lib/api'
+import { getNotes, getTodos, getIdeas, getMindMaps, getLinks, getProjects, getLibraryFiles, createNote, deleteTodo, logout } from './lib/api'
+
+const STALE_TODO_TEXTS = new Set([
+  'อ่าน Anorexia paper 📄 ไฟล์อยู่: Obsidian/Notes/anorexia.pdf (sync แล้ว)'
+])
 
 const VIEWS = [
   { id: 'notes',   label: 'Notes',    icon: 'ti-file-text' },
   { id: 'todo',    label: 'To-Do',    icon: 'ti-check' },
-  { id: 'mindmap', label: 'Mind Map', icon: 'ti-git-fork' },
+  { id: 'mindmap', label: 'Diagrams', icon: 'ti-chart-arrows' },
   { id: 'ideas',   label: 'Ideas',    icon: 'ti-bulb' },
+  { id: 'projects', label: 'Projects', icon: 'ti-world-share' },
   { id: 'library', label: 'Library',  icon: 'ti-books' },
 ]
 
 export default function App() {
+  const publicSlug = window.location.pathname === '/' ? '' : decodeURIComponent(window.location.pathname.replace(/^\/+|\/+$/g, '').split('/')[0] || '')
   const [authed, setAuthed] = useState(null)   // null = loading, false = login, true = app
   const [view, setView] = useState('notes')
   const [notes, setNotes] = useState([])
   const [todos, setTodos] = useState([])
   const [ideas, setIdeas] = useState([])
   const [mindMaps, setMindMaps] = useState([])
+  const [projects, setProjects] = useState([])
+  const [libraryFiles, setLibraryFiles] = useState([])
   const [links, setLinks] = useState([])
   const [currentNoteId, setCurrentNoteId] = useState(null)
   const [selectedTodoId, setSelectedTodoId] = useState(null)
@@ -42,10 +52,11 @@ export default function App() {
 
   // Check if already authed by trying to load data
   useEffect(() => {
+    if (publicSlug) return
     getNotes()
       .then(data => { setNotes(data); setCurrentNoteId(data[0]?.id || null); setAuthed(true) })
       .catch(() => setAuthed(false))
-  }, [])
+  }, [publicSlug])
 
   useEffect(() => {
     if (!authed) return
@@ -73,7 +84,33 @@ export default function App() {
         if (err?.status === 401) setAuthed(false)
         else console.error(err)
       })
+    getProjects()
+      .then(setProjects)
+      .catch(err => {
+        if (err?.status === 401) setAuthed(false)
+        else console.error(err)
+      })
+    getLibraryFiles()
+      .then(data => setLibraryFiles(data.files || []))
+      .catch(err => {
+        if (err?.status === 401) setAuthed(false)
+        else console.error(err)
+      })
   }, [authed])
+
+  useEffect(() => {
+    if (!authed || todos.length === 0) return
+
+    const staleTodos = todos.filter(todo => !todo.done && STALE_TODO_TEXTS.has(todo.text))
+    if (!staleTodos.length) return
+
+    Promise.all(staleTodos.map(todo => deleteTodo(todo.id)))
+      .then(() => {
+        const staleIds = new Set(staleTodos.map(todo => todo.id))
+        setTodos(prev => prev.filter(todo => !staleIds.has(todo.id)))
+      })
+      .catch(console.error)
+  }, [authed, todos])
 
   useEffect(() => {
     function handleResize() {
@@ -103,8 +140,10 @@ export default function App() {
     const data = await getNotes()
     setNotes(data)
     setCurrentNoteId(data[0]?.id || null)
-    const [td, id, mm, lk] = await Promise.all([getTodos(), getIdeas(), getMindMaps(), getLinks()])
+    const [td, id, mm, lk, pr, lf] = await Promise.all([getTodos(), getIdeas(), getMindMaps(), getLinks(), getProjects(), getLibraryFiles()])
     setTodos(td); setIdeas(id); setMindMaps(mm); setLinks(lk)
+    setProjects(pr)
+    setLibraryFiles(lf.files || [])
     setAuthed(true)
     setShowBriefing(true)
   }
@@ -112,7 +151,7 @@ export default function App() {
   async function handleLogout() {
     await logout()
     setAuthed(false)
-    setNotes([]); setTodos([]); setIdeas([]); setMindMaps([]); setLinks([])
+    setNotes([]); setTodos([]); setIdeas([]); setMindMaps([]); setLinks([]); setProjects([]); setLibraryFiles([])
   }
 
   async function handleNewNote(parentId = null) {
@@ -120,6 +159,11 @@ export default function App() {
     setNotes(prev => [note, ...prev])
     setCurrentNoteId(note.id)
     setView('notes')
+  }
+
+  async function handleBriefingDeleteTodo(id) {
+    await deleteTodo(id)
+    setTodos(prev => prev.filter(todo => todo.id !== id))
   }
 
   function handleNoteSaved(id, updates) {
@@ -131,6 +175,10 @@ export default function App() {
     const remaining = notes.filter(n => !removedIds.includes(n.id))
     setNotes(remaining)
     setCurrentNoteId(prev => removedIds.includes(prev) ? (remaining[0]?.id || null) : prev)
+  }
+
+  if (publicSlug) {
+    return <PublicProjectPage slug={publicSlug} />
   }
 
   if (authed === null) {
@@ -185,7 +233,7 @@ export default function App() {
         ...mindMaps
           .filter(item => mindMapSearchText(item).includes(normalizedSearch))
           .slice(0, 4)
-          .map(item => ({ id: `mindmap-${item.id}`, type: 'mindmap', title: item.title || 'Untitled map', subtitle: (item.content || '').split('\n')[0] || 'Saved mind map', targetId: item.id }))
+          .map(item => ({ id: `mindmap-${item.id}`, type: 'mindmap', title: item.title || 'Untitled diagram', subtitle: (item.content || '').split('\n')[0] || 'Saved diagram', targetId: item.id }))
       ]
     : []
 
@@ -380,7 +428,7 @@ export default function App() {
           <div style={{ display: 'flex', gap: isMobile ? '6px' : '0', flexDirection: isMobile ? 'column' : 'column', minWidth: 0 }}>
             {VIEWS.map(v => {
               const isActive = view === v.id
-              const badge = v.id === 'todo' ? totalTodos - noteDone : v.id === 'notes' ? notes.length : v.id === 'ideas' ? ideas.length : null
+              const badge = v.id === 'todo' ? totalTodos - noteDone : v.id === 'notes' ? notes.length : v.id === 'ideas' ? ideas.length : v.id === 'projects' ? projects.length : null
               return (
                 <div key={v.id} onClick={() => { setView(v.id); setMobileMenuOpen(false) }} style={{
                   display: 'flex', alignItems: 'center', gap: '8px', padding: isMobile ? '9px 10px' : '7px 8px',
@@ -436,7 +484,7 @@ export default function App() {
         onTodoCreated={() => getTodos().then(setTodos).catch(console.error)}
       />
 
-      {showBriefing && <DailyBriefing todos={todos} onClose={() => setShowBriefing(false)} />}
+      {showBriefing && <DailyBriefing todos={todos} onClose={() => setShowBriefing(false)} onDeleteTodo={handleBriefingDeleteTodo} />}
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: isMobile ? 'auto' : 'hidden', minHeight: 0 }}>
@@ -452,13 +500,14 @@ export default function App() {
             externalSearch={globalSearch}
             links={links}
             setLinks={setLinks}
-            entities={{ notes, todos, ideas, mindMaps }}
+            entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }}
             onNavigate={navigateToEntity}
           />
         )}
-        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} selectedTodoId={selectedTodoId} setSelectedTodoId={setSelectedTodoId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
-        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
-        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} selectedIdeaId={selectedIdeaId} setSelectedIdeaId={setSelectedIdeaId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps }} onNavigate={navigateToEntity} />}
+        {view === 'todo' && <TodoPanel todos={todos} setTodos={setTodos} isMobile={isMobile} externalSearch={globalSearch} selectedTodoId={selectedTodoId} setSelectedTodoId={setSelectedTodoId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
+        {view === 'mindmap' && <MindMapPanel isMobile={isMobile} savedMaps={mindMaps} setSavedMaps={setMindMaps} externalSearch={globalSearch} openMapId={openMindMapId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
+        {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} selectedIdeaId={selectedIdeaId} setSelectedIdeaId={setSelectedIdeaId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
+        {view === 'projects' && <ProjectsPanel projects={projects} setProjects={setProjects} entities={{ notes, todos, ideas, mindMaps, libraryFiles }} isMobile={isMobile} onNavigate={navigateToEntity} />}
         {view === 'library' && <BookUploadPanel isMobile={isMobile} />}
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createIdea, deleteIdea } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
+import { EmojiChips, QUICK_EMOJIS } from '../lib/emoji'
 
 const COLORS = {
   teal: {
@@ -50,8 +51,6 @@ const COLORS = {
   }
 }
 
-const EMOJIS = ['💡', '🔬', '📌', '🧠', '⚡', '🌱', '🔭', '🎯', '📡', '🧪', '💊', '🩺', '📊', '🌀', '✨']
-
 function formatDate(ts) {
   if (!ts) return ''
   return new Date(parseInt(ts, 10)).toLocaleDateString('en-US', {
@@ -70,6 +69,7 @@ function summarize(text) {
 export default function IdeasPanel({ ideas, setIdeas, isMobile = false, externalSearch = '', selectedIdeaId = null, setSelectedIdeaId, links = [], setLinks, entities, onNavigate }) {
   const [text, setText] = useState('')
   const [color, setColor] = useState('teal')
+  const [emoji, setEmoji] = useState('💡')
   const [search, setSearch] = useState(externalSearch)
 
   useEffect(() => {
@@ -85,7 +85,6 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
   async function add() {
     if (!text.trim()) return
     try {
-      const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)]
       const idea = await createIdea({ content: text.trim(), color, emoji })
       setIdeas(prev => [idea, ...prev])
       setText('')
@@ -185,7 +184,23 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
               minHeight: '160px'
             }}
           />
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '11px', color: '#7E6C57', marginBottom: '7px' }}>Emoji tag</div>
+            <EmojiChips emojis={QUICK_EMOJIS} onPick={setEmoji} />
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <div style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '10px',
+              background: 'rgba(255,255,255,0.82)',
+              border: '1px solid rgba(77, 57, 27, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '18px',
+              flexShrink: 0
+            }}>{emoji}</div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {Object.entries(COLORS).map(([name, palette]) => (
                 <button

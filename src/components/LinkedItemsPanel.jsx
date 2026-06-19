@@ -5,7 +5,8 @@ const TYPE_META = {
   notes: { command: '/note', label: 'Note', color: '#185FA5', bg: '#E6F1FB', icon: 'ti-file-text' },
   todo: { command: '/todo', label: 'To-Do', color: '#854F0B', bg: '#FAEEDA', icon: 'ti-checklist' },
   ideas: { command: '/idea', label: 'Idea', color: '#534AB7', bg: '#EEEDFE', icon: 'ti-bulb' },
-  mindmap: { command: '/mindmap', label: 'Mind Map', color: '#085041', bg: '#E1F5EE', icon: 'ti-git-fork' }
+  mindmap: { command: '/diagram', label: 'Diagram', color: '#085041', bg: '#E1F5EE', icon: 'ti-chart-arrows' },
+  library: { command: '/library', label: 'Library', color: '#6A4710', bg: '#FBF1DE', icon: 'ti-books' }
 }
 
 function entityTitle(type, entity) {
@@ -13,6 +14,7 @@ function entityTitle(type, entity) {
   if (type === 'notes') return entity.title || 'Untitled note'
   if (type === 'todo') return entity.text || 'Untitled task'
   if (type === 'ideas') return entity.content || 'Untitled idea'
+  if (type === 'library') return entity.name || 'Library file'
   return entity.title || 'Untitled map'
 }
 
@@ -21,6 +23,7 @@ function entitySubtitle(type, entity) {
   if (type === 'notes') return (entity.tags || []).map(tag => `#${tag}`).join(' ')
   if (type === 'todo') return entity.item_type === 'appointment' ? 'Appointment' : 'Task'
   if (type === 'ideas') return `${entity.emoji || '💡'} ${entity.color || ''}`.trim()
+  if (type === 'library') return entity.type ? `${entity.type} file` : 'R2 file'
   return 'Saved mind map'
 }
 
@@ -29,7 +32,8 @@ function buildIndex(entities) {
     notes: new Map((entities.notes || []).map(item => [item.id, item])),
     todo: new Map((entities.todos || []).map(item => [item.id, item])),
     ideas: new Map((entities.ideas || []).map(item => [item.id, item])),
-    mindmap: new Map((entities.mindMaps || []).map(item => [item.id, item]))
+    mindmap: new Map((entities.mindMaps || []).map(item => [item.id, item])),
+    library: new Map((entities.libraryFiles || []).map(item => [item.url, item]))
   }
 }
 
@@ -123,7 +127,7 @@ export default function LinkedItemsPanel({
       <input
         value={quickInput}
         onChange={e => setQuickInput(e.target.value)}
-        placeholder="Quick link: /note stroke or /todo follow up"
+        placeholder="Quick link: /note stroke or /library pdf"
         style={{
           width: '100%',
           padding: '9px 10px',
@@ -138,7 +142,7 @@ export default function LinkedItemsPanel({
         }}
       />
       <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '6px', lineHeight: '1.5' }}>
-        Use /note, /todo, /idea, or /mindmap then type a search word.
+        Use /note, /todo, /idea, /diagram, or /library then type a search word.
       </div>
 
       {suggestions.length > 0 && (
@@ -148,7 +152,7 @@ export default function LinkedItemsPanel({
             return (
               <button
                 key={`${quickType}-${item.id}`}
-                onClick={() => handleCreate(quickType, item.id)}
+                onClick={() => handleCreate(quickType, quickType === 'library' ? item.url : item.id, entityTitle(quickType, item))}
                 disabled={saving}
                 style={{
                   textAlign: 'left',
@@ -180,12 +184,13 @@ export default function LinkedItemsPanel({
           </div>
         ) : (
           sourceLinks.map(link => {
-            const meta = TYPE_META[link.to_type]
+            const meta = TYPE_META[link.to_type] || TYPE_META.notes
             const entity = index[link.to_type]?.get(link.to_id)
+            const isExternal = link.to_type === 'library'
             return (
               <div key={link.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '12px', background: 'var(--color-background-primary)', minWidth: 0 }}>
                 <button
-                  onClick={() => onNavigate(link.to_type, link.to_id)}
+                  onClick={() => isExternal ? window.open(link.to_id, '_blank', 'noopener,noreferrer') : onNavigate(link.to_type, link.to_id)}
                   style={{
                     border: 'none',
                     background: meta.bg,
@@ -205,7 +210,7 @@ export default function LinkedItemsPanel({
                   {meta.label}
                 </button>
                 <button
-                  onClick={() => onNavigate(link.to_type, link.to_id)}
+                  onClick={() => isExternal ? window.open(link.to_id, '_blank', 'noopener,noreferrer') : onNavigate(link.to_type, link.to_id)}
                   style={{
                     flex: 1,
                     border: 'none',
@@ -218,7 +223,7 @@ export default function LinkedItemsPanel({
                   }}
                 >
                   <div style={{ fontSize: '12px', color: 'var(--color-text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {entityTitle(link.to_type, entity)}
+                    {link.to_type === 'library' ? (link.label || entityTitle(link.to_type, entity)) : entityTitle(link.to_type, entity)}
                   </div>
                   <div style={{ fontSize: '10px', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
                     {link.label || entitySubtitle(link.to_type, entity)}

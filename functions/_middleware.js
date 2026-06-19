@@ -10,8 +10,8 @@ export async function onRequest({ request, env, next }) {
     return next()
   }
 
-  // Allow login endpoint without auth
-  if (url.pathname === '/api/auth/login') {
+  // Allow login and public read-only endpoints without auth
+  if (url.pathname === '/api/auth/login' || url.pathname.startsWith('/api/public/')) {
     return next()
   }
 

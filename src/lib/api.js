@@ -48,6 +48,39 @@ export const createMindMap = (data) => req('POST', '/mindmaps', data)
 export const updateMindMap = (id, data) => req('PUT', `/mindmaps/${id}`, data)
 export const deleteMindMap = (id) => req('DELETE', `/mindmaps/${id}`)
 
+// Projects
+export const getProjects = () => req('GET', '/projects')
+export const createProject = (data) => req('POST', '/projects', data)
+export const updateProject = (id, data) => req('PUT', `/projects/${id}`, data)
+export const deleteProject = (id) => req('DELETE', `/projects/${id}`)
+export const addProjectItem = (projectId, data) => req('POST', `/projects/${projectId}/items`, data)
+export const updateProjectItem = (id, data) => req('PUT', `/project-items/${id}`, data)
+export const deleteProjectItem = (id) => req('DELETE', `/project-items/${id}`)
+export const syncProjectToObsidian = (id) => req('POST', `/projects/${id}/obsidian`)
+export const getPublicProject = async (slug) => {
+  const res = await fetch(`${BASE}/public/projects/${encodeURIComponent(slug)}`)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText)
+    err.status = res.status
+    throw err
+  }
+  return data
+}
+export const getPrivateProject = (slug) => req('GET', `/projects/by-slug/${encodeURIComponent(slug)}`)
+
+// Library
+export const getLibraryFiles = async () => {
+  const res = await fetch('/api/library', { credentials: 'same-origin' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(data.error || res.statusText)
+    err.status = res.status
+    throw err
+  }
+  return data
+}
+
 // Links
 export const getLinks = (params) => {
   const search = params

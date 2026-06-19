@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createTodo, updateTodo, deleteTodo } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
+import { EmojiChips } from '../lib/emoji'
 
 const PRIO = {
   high: { bg: '#FCEBEB', color: '#A32D2D' },
@@ -180,6 +181,10 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
       })
       setTodos(prev => [created, ...prev])
     } catch (e) { alert(e.message) }
+  }
+
+  function insertEmoji(emoji) {
+    setNewText(prev => prev ? `${prev} ${emoji}` : `${emoji} `)
   }
 
   async function remove(id) {
@@ -668,6 +673,9 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
             outline: 'none', marginBottom: '8px', boxSizing: 'border-box'
           }}
         />
+        <div style={{ margin: '0 0 10px' }}>
+          <EmojiChips onPick={insertEmoji} compact={isMobile} />
+        </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <select value={newSection} onChange={e => setNewSection(e.target.value)} style={{ padding: '5px 8px', fontSize: '12px', borderRadius: '6px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', fontFamily: 'inherit' }}>
             <option value="today">Today</option>

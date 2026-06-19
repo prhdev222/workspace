@@ -1,175 +1,226 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createMindMap, deleteMindMap, updateMindMap } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
+import { EmojiChips } from '../lib/emoji'
 
-const BRANCH_COLORS = ['#1D9E75', '#378ADD', '#7F77DD', '#EF9F27', '#E24B4A', '#D4537E']
-const INITIAL_TEXT = ''
+const DEFAULT_DIAGRAM = `flowchart TD
+  A[🩺 Clinical question] --> B[🔎 Assess key features]
+  B --> C{🚨 High risk?}
+  C -->|Yes| D[⚡ Act now]
+  C -->|No| E[👀 Observe and follow up]`
 
-function splitLabel(text, maxChars = 14) {
-  const words = String(text || '').split(/\s+/).filter(Boolean)
-  if (!words.length) return ['']
+const TEMPLATES = [
+  {
+    id: 'flowchart',
+    label: 'Flowchart',
+    icon: 'ti-git-branch',
+    title: '🧭 New Flowchart',
+    content: `flowchart TD
+  A[🚀 Start] --> B[🔎 Step 1]
+  B --> C[🧪 Step 2]
+  C --> D[✅ Done]`
+  },
+  {
+    id: 'algorithm',
+    label: 'Clinical algorithm',
+    icon: 'ti-stethoscope',
+    title: '🩺 Clinical Algorithm',
+    content: `flowchart TD
+  A[🩺 Patient problem] --> B[📋 History and exam]
+  B --> C[🧪 Initial tests]
+  C --> D{🚨 Red flags?}
+  D -->|Yes| E[⚡ Urgent management]
+  D -->|No| F[✅ Standard pathway]`
+  },
+  {
+    id: 'timeline',
+    label: 'Timeline',
+    icon: 'ti-timeline',
+    title: '📅 Timeline',
+    content: `timeline
+  title 💊 Treatment Timeline
+  Day 0 : 🩺 Diagnosis
+  Day 1 : 💊 Start treatment
+  Week 2 : 🔎 Assess response
+  Month 3 : 📌 Follow-up`
+  },
+  {
+    id: 'sequence',
+    label: 'Process',
+    icon: 'ti-arrows-exchange',
+    title: '🔁 Process Diagram',
+    content: `sequenceDiagram
+  participant User as 👤 User
+  participant App as 🧭 App
+  participant Database as 🗄️ Database
+  User->>App: Create diagram
+  App->>Database: Save Mermaid
+  Database-->>App: ✅ Saved`
+  }
+]
 
-  const lines = []
-  let current = ''
+let mermaidInstance = null
 
-  words.forEach(word => {
-    if (!current || `${current} ${word}`.length <= maxChars) {
-      current = current ? `${current} ${word}` : word
-    } else {
-      lines.push(current)
-      current = word
+async function loadMermaid() {
+  if (mermaidInstance) return mermaidInstance
+
+  const module = await import('mermaid')
+  mermaidInstance = module.default
+  mermaidInstance.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#E1F5EE',
+      primaryTextColor: '#173B33',
+      primaryBorderColor: '#1D9E75',
+      lineColor: '#5E766E',
+      secondaryColor: '#F4F0E8',
+      tertiaryColor: '#EEF3F8',
+      fontFamily: 'DM Sans, system-ui, sans-serif'
     }
   })
-
-  if (current) lines.push(current)
-  return lines.slice(0, 3)
+  return mermaidInstance
 }
 
-function parseMindMap(raw) {
-  const lines = raw
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-
-  if (!lines.length) return null
-
-  let title = 'Mind Map'
-  let pathLines = lines
-
-  if (!lines[0].includes('->')) {
-    title = lines[0]
-    pathLines = lines.slice(1)
-  }
-
-  if (!pathLines.length) {
-    return {
-      title,
-      nodes: [{ id: 'root', label: title, depth: 0, parentId: null, color: BRANCH_COLORS[0] }],
-      links: []
-    }
-  }
-
-  const nodesByKey = new Map()
-  const nodes = []
-  const links = []
-
-  function ensureNode(label, depth, parentId, color, key) {
-    if (nodesByKey.has(key)) return nodesByKey.get(key)
-
-    const node = {
-      id: key,
-      label,
-      depth,
-      parentId,
-      color
-    }
-    nodesByKey.set(key, node)
-    nodes.push(node)
-    return node
-  }
-
-  const root = ensureNode(title, 0, null, BRANCH_COLORS[0], 'root')
-
-  pathLines.forEach((line, lineIndex) => {
-    let parts = line
-      .replace(/--?>/g, '->')
-      .split('->')
-      .map(part => part.trim())
-      .filter(Boolean)
-
-    if (!parts.length) return
-
-    if (parts[0].toLowerCase() === title.toLowerCase()) {
-      parts = parts.slice(1)
-    }
-
-    if (!parts.length) return
-
-    let parent = root
-    let pathKey = 'root'
-
-    parts.forEach((label, index) => {
-      pathKey = `${pathKey}__${label.toLowerCase()}`
-      const color = BRANCH_COLORS[lineIndex % BRANCH_COLORS.length]
-      const node = ensureNode(label, index + 1, parent.id, color, pathKey)
-
-      if (!links.some(link => link.from === parent.id && link.to === node.id)) {
-        links.push({ from: parent.id, to: node.id, color })
-      }
-
-      parent = node
-    })
-  })
-
-  return { title, nodes, links }
-}
-
-function layoutMindMap(map) {
-  const nodesByDepth = new Map()
-
-  map.nodes.forEach(node => {
-    if (!nodesByDepth.has(node.depth)) nodesByDepth.set(node.depth, [])
-    nodesByDepth.get(node.depth).push(node)
-  })
-
-  const depths = [...nodesByDepth.keys()].sort((a, b) => a - b)
-  const positionedNodes = []
-  const positions = new Map()
-
-  const colWidth = 230
-  const rowHeight = 108
-  const marginX = 48
-  const marginY = 40
-  const nodeWidth = 156
-  const nodeHeight = 62
-
-  depths.forEach(depth => {
-    const columnNodes = nodesByDepth.get(depth)
-    const totalHeight = columnNodes.length * rowHeight
-    const startY = marginY + Math.max(0, (520 - totalHeight) / 2)
-
-    columnNodes.forEach((node, index) => {
-      const x = marginX + depth * colWidth
-      const y = startY + index * rowHeight
-      const positioned = { ...node, x, y, width: nodeWidth, height: nodeHeight }
-      positionedNodes.push(positioned)
-      positions.set(node.id, positioned)
-    })
-  })
-
-  const maxDepth = depths.length ? Math.max(...depths) : 0
-  const width = marginX * 2 + (maxDepth + 1) * colWidth
-  const lowestNodeEdge = positionedNodes.length
-    ? Math.max(...positionedNodes.map(node => node.y + node.height))
-    : 0
-  const height = Math.max(560, lowestNodeEdge + marginY + 36)
-
-  return {
-    nodes: positionedNodes,
-    links: map.links.map(link => ({
-      ...link,
-      fromNode: positions.get(link.from),
-      toNode: positions.get(link.to)
-    })),
-    width,
-    height
-  }
-}
-
-function mindMapMatchesSearch(item, query) {
+function diagramMatchesSearch(item, query) {
   const normalized = query.trim().toLowerCase()
   if (!normalized) return true
   return [item.title, item.content].join(' ').toLowerCase().includes(normalized)
 }
 
-export default function MindMapPanel({ isMobile = false, savedMaps = [], setSavedMaps, externalSearch = '', openMapId = null, links = [], setLinks, entities, onNavigate }) {
-  const [draft, setDraft] = useState(INITIAL_TEXT)
-  const [map, setMap] = useState(null)
-  const [isExpanded, setIsExpanded] = useState(false)
+function looksLikeMermaid(text) {
+  return /^(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram|erDiagram|journey|gantt|pie|timeline|mindmap|quadrantChart|requirementDiagram|gitGraph)\b/i.test(text.trim())
+}
+
+function escapeMermaidLabel(text) {
+  return String(text || '')
+    .replace(/"/g, "'")
+    .replace(/\[/g, '(')
+    .replace(/\]/g, ')')
+    .trim()
+}
+
+function simpleTextToMermaid(raw) {
+  const lines = raw
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+
+  if (!lines.length) return DEFAULT_DIAGRAM
+  if (looksLikeMermaid(lines.join('\n'))) return lines.join('\n')
+
+  const title = lines[0].includes('->') ? 'Diagram' : lines[0]
+  const pathLines = lines[0].includes('->') ? lines : lines.slice(1)
+
+  if (!pathLines.length) {
+    return `flowchart TD\n  A["${escapeMermaidLabel(title)}"]`
+  }
+
+  const nodeIds = new Map()
+  let counter = 0
+
+  function idFor(label) {
+    const key = label.toLowerCase()
+    if (!nodeIds.has(key)) {
+      counter += 1
+      nodeIds.set(key, `N${counter}`)
+    }
+    return nodeIds.get(key)
+  }
+
+  const edges = []
+  pathLines.forEach(line => {
+    const parts = line
+      .replace(/--?>/g, '->')
+      .split('->')
+      .map(part => part.trim())
+      .filter(Boolean)
+
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      const from = parts[i]
+      const to = parts[i + 1]
+      edges.push(`  ${idFor(from)}["${escapeMermaidLabel(from)}"] --> ${idFor(to)}["${escapeMermaidLabel(to)}"]`)
+    }
+  })
+
+  return ['flowchart TD', ...new Set(edges)].join('\n')
+}
+
+function MermaidPreview({ code }) {
+  const ref = useRef(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function renderDiagram() {
+      setError('')
+      if (!ref.current) return
+
+      try {
+        const mermaid = await loadMermaid()
+        const id = `diagram-${crypto.randomUUID()}`
+        const { svg } = await mermaid.render(id, code || DEFAULT_DIAGRAM)
+        if (!cancelled && ref.current) ref.current.innerHTML = svg
+      } catch (e) {
+        if (!cancelled) {
+          setError(e.message || 'Could not render diagram')
+          if (ref.current) ref.current.innerHTML = ''
+        }
+      }
+    }
+
+    renderDiagram()
+    return () => { cancelled = true }
+  }, [code])
+
+  if (error) {
+    return (
+      <div style={{
+        padding: '16px',
+        borderRadius: '12px',
+        background: '#FCEBEB',
+        color: '#A32D2D',
+        fontSize: '12px',
+        lineHeight: 1.6,
+        whiteSpace: 'pre-wrap'
+      }}>
+        Mermaid error: {error}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        minHeight: '280px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    />
+  )
+}
+
+export default function MindMapPanel({
+  isMobile = false,
+  savedMaps = [],
+  setSavedMaps,
+  externalSearch = '',
+  openMapId = null,
+  links = [],
+  setLinks,
+  entities,
+  onNavigate
+}) {
+  const [draft, setDraft] = useState(DEFAULT_DIAGRAM)
   const [currentMapId, setCurrentMapId] = useState(null)
-  const [mapTitle, setMapTitle] = useState('')
+  const [diagramTitle, setDiagramTitle] = useState('Clinical Diagram')
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState(externalSearch)
+  const [fullscreenPreview, setFullscreenPreview] = useState(false)
 
   useEffect(() => {
     setSearch(externalSearch)
@@ -181,16 +232,22 @@ export default function MindMapPanel({ isMobile = false, savedMaps = [], setSave
     if (target) handleLoad(target)
   }, [openMapId, savedMaps])
 
-  function generate() {
-    const parsed = parseMindMap(draft)
-    setMap(parsed)
-    if (parsed && !mapTitle.trim()) setMapTitle(parsed.title || 'Untitled map')
+  const mermaidCode = useMemo(() => simpleTextToMermaid(draft), [draft])
+  const filteredSavedMaps = savedMaps.filter(item => diagramMatchesSearch(item, search))
+
+  function applyTemplate(template) {
+    setDiagramTitle(template.title)
+    setDraft(template.content)
+    setCurrentMapId(null)
+  }
+
+  function insertEmoji(emoji) {
+    setDraft(prev => `${prev}${prev.endsWith(' ') || prev.endsWith('\n') ? '' : ' '}${emoji} `)
   }
 
   function clearAll() {
-    setDraft('')
-    setMap(null)
-    setMapTitle('')
+    setDraft(DEFAULT_DIAGRAM)
+    setDiagramTitle('Clinical Diagram')
     setCurrentMapId(null)
   }
 
@@ -200,7 +257,7 @@ export default function MindMapPanel({ isMobile = false, savedMaps = [], setSave
 
     setSaving(true)
     try {
-      const title = mapTitle.trim() || parseMindMap(draft)?.title || 'Untitled map'
+      const title = diagramTitle.trim() || 'Untitled diagram'
       if (currentMapId) {
         await updateMindMap(currentMapId, { title, content })
         setSavedMaps(prev => prev.map(item => item.id === currentMapId ? { ...item, title, content, updated_at: Date.now() } : item))
@@ -209,7 +266,6 @@ export default function MindMapPanel({ isMobile = false, savedMaps = [], setSave
         setCurrentMapId(created.id)
         setSavedMaps(prev => [created, ...prev])
       }
-      setMapTitle(title)
     } catch (e) {
       alert(`Save failed: ${e.message}`)
     } finally {
@@ -219,14 +275,13 @@ export default function MindMapPanel({ isMobile = false, savedMaps = [], setSave
 
   function handleLoad(saved) {
     setCurrentMapId(saved.id)
-    setMapTitle(saved.title || '')
-    setDraft(saved.content || '')
-    setMap(parseMindMap(saved.content || ''))
-    if (isMobile) setIsExpanded(true)
+    setDiagramTitle(saved.title || 'Untitled diagram')
+    setDraft(saved.content || DEFAULT_DIAGRAM)
+    if (isMobile) setFullscreenPreview(false)
   }
 
   async function handleDeleteSaved(id) {
-    if (!confirm('Delete this saved mind map?')) return
+    if (!confirm('Delete this saved diagram?')) return
     try {
       await deleteMindMap(id)
       setSavedMaps(prev => prev.filter(item => item.id !== id))
@@ -236,10 +291,9 @@ export default function MindMapPanel({ isMobile = false, savedMaps = [], setSave
     }
   }
 
-  const layout = map ? layoutMindMap(map) : null
-  const showBuilder = !isMobile || !isExpanded
-  const canvasPadding = isMobile ? '10px' : '20px 22px 24px'
-  const filteredSavedMaps = savedMaps.filter(item => mindMapMatchesSearch(item, search))
+  function copyMermaid() {
+    navigator.clipboard?.writeText(mermaidCode).catch(() => {})
+  }
 
   return (
     <div style={{
@@ -247,440 +301,246 @@ export default function MindMapPanel({ isMobile = false, savedMaps = [], setSave
       flexDirection: 'column',
       flex: 1,
       minHeight: 0,
-      overflow: isMobile && !isExpanded ? 'auto' : 'hidden'
+      overflow: 'hidden',
+      background: 'var(--color-background-primary)'
     }}>
-      {showBuilder && (
-        <div
-          style={{
-            padding: isMobile ? '12px' : '14px 16px',
-            borderBottom: '0.5px solid var(--color-border-tertiary)',
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '360px 1fr',
-            gap: '14px',
-            alignItems: 'start'
-          }}
-        >
-        <div
-          style={{
-            padding: '16px',
-            borderRadius: '18px',
-            background: 'linear-gradient(145deg, #eef7f3 0%, #f5f0e8 100%)',
-            border: '0.5px solid rgba(17, 71, 59, 0.12)'
-          }}
-        >
-          <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: '#6F7B74', marginBottom: '8px' }}>
-            Mind Map Builder
+      <div style={{
+        padding: isMobile ? '12px' : '14px 16px',
+        borderBottom: '0.5px solid var(--color-border-tertiary)',
+        display: 'flex',
+        gap: '8px',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        background: 'var(--color-background-secondary)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <i className="ti ti-chart-arrows" style={{ fontSize: '17px', color: '#1D9E75' }} />
+          <div>
+            <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-text-primary)' }}>Diagrams</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>Mermaid diagrams for algorithms, timelines, and workflows</div>
           </div>
-          <div style={{ fontFamily: "'Lora', serif", fontSize: isMobile ? '21px' : '24px', color: '#24332D', marginBottom: '10px' }}>
-            Build nodes with real links.
-          </div>
-          <input
-            value={mapTitle}
-            onChange={e => setMapTitle(e.target.value)}
-            placeholder="Map title"
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              border: '1px solid rgba(36, 51, 45, 0.12)',
-              borderRadius: '12px',
-              fontSize: '13px',
-              fontFamily: 'inherit',
-              background: 'rgba(255,255,255,0.82)',
-              color: '#24332D',
-              outline: 'none',
-              boxSizing: 'border-box',
-              marginBottom: '10px'
-            }}
-          />
-          <textarea
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault()
-                generate()
-              }
-            }}
-            rows={11}
-            placeholder={'Project Plan\nProject Plan -> Research -> Users\nProject Plan -> Design -> Wireframes\nProject Plan -> Build -> Frontend\nProject Plan -> Build -> Backend'}
-            style={{
-              width: '100%',
-              padding: '14px 15px',
-              border: '1px solid rgba(36, 51, 45, 0.12)',
-              borderRadius: '14px',
-              fontSize: '13px',
-              lineHeight: '1.7',
-              fontFamily: 'inherit',
-              resize: 'vertical',
-              background: 'rgba(255,255,255,0.84)',
-              color: '#24332D',
-              outline: 'none',
-              boxSizing: 'border-box',
-              minHeight: '210px'
-            }}
-          />
-          <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
-            <button
-              onClick={generate}
-              style={{
-                padding: '8px 16px',
-                background: '#1D9E75',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                fontSize: '12px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                fontFamily: 'inherit'
-              }}
-            >
-              Generate map
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving || !draft.trim()}
-              style={{
-                padding: '8px 16px',
-                background: saving ? '#82CBB4' : '#173B33',
-                color: 'white',
-                border: 'none',
-                borderRadius: '10px',
-                fontSize: '12px',
-                fontWeight: '600',
-                cursor: saving || !draft.trim() ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit'
-              }}
-            >
-              {saving ? 'Saving...' : currentMapId ? 'Update save' : 'Save map'}
-            </button>
-            <button
-              onClick={clearAll}
-              style={{
-                padding: '8px 12px',
-                background: 'transparent',
-                color: '#5B6660',
-                border: '0.5px solid rgba(36, 51, 45, 0.14)',
-                borderRadius: '10px',
-                fontSize: '12px',
-                cursor: 'pointer',
-                fontFamily: 'inherit'
-              }}
-            >
-              Clear
-            </button>
-            {isMobile && (
-              <button
-                onClick={() => setIsExpanded(true)}
-                style={{
-                  padding: '8px 12px',
-                  background: 'transparent',
-                  color: '#24453D',
-                  border: '0.5px solid rgba(36, 69, 61, 0.18)',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit'
-                }}
-              >
-                Full map
-              </button>
-            )}
-          </div>
-          <div style={{ marginTop: '10px', fontSize: '11px', color: '#73807A', lineHeight: '1.6' }}>
-            First line can be the map title.
-            <br />
-            Each next line creates a linked path using {'`->`'}.
-            <br />
-            Example: {'`Stroke -> Assessment -> NIHSS`'}
-            <br />
-            Press {'`Cmd/Ctrl + Enter`'} to generate quickly.
-          </div>
-          {currentMapId && (
-            <LinkedItemsPanel
-              sourceType="mindmap"
-              sourceId={currentMapId}
-              links={links}
-              setLinks={setLinks}
-              entities={entities}
-              onNavigate={onNavigate}
-              compact
-            />
-          )}
         </div>
+        <div style={{ flex: 1 }} />
+        {TEMPLATES.map(template => (
+          <button
+            key={template.id}
+            onClick={() => applyTemplate(template)}
+            style={{
+              padding: '7px 10px',
+              borderRadius: '8px',
+              border: '0.5px solid var(--color-border-secondary)',
+              background: 'var(--color-background-primary)',
+              color: 'var(--color-text-secondary)',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: '600',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}
+          >
+            <i className={`ti ${template.icon}`} style={{ fontSize: '13px' }} />
+            {!isMobile && template.label}
+          </button>
+        ))}
+      </div>
 
-        <div
-          style={{
-            padding: '16px',
-            borderRadius: '18px',
-            border: '0.5px solid var(--color-border-tertiary)',
-            background: 'var(--color-background-secondary)',
-            minWidth: 0
-          }}
-        >
-          <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>
-            Saved Maps
-          </div>
-          <div style={{ position: 'relative', marginBottom: '10px' }}>
-            <i
-              className="ti ti-search"
-              style={{
-                position: 'absolute',
-                left: '11px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                fontSize: '12px',
-                color: 'var(--color-text-tertiary)'
-              }}
-            />
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : 'minmax(320px, 430px) minmax(0, 1fr)',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'hidden'
+      }}>
+        {!(isMobile && fullscreenPreview) && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            overflow: 'auto',
+            borderRight: isMobile ? 'none' : '0.5px solid var(--color-border-tertiary)',
+            padding: isMobile ? '12px' : '16px'
+          }}>
             <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search saved maps"
+              value={diagramTitle}
+              onChange={e => setDiagramTitle(e.target.value)}
+              placeholder="Diagram title"
               style={{
                 width: '100%',
-                padding: '9px 12px 9px 32px',
+                padding: '10px 12px',
                 border: '0.5px solid var(--color-border-secondary)',
                 borderRadius: '10px',
-                fontSize: '12px',
+                fontSize: '13px',
                 fontFamily: 'inherit',
                 background: 'var(--color-background-primary)',
                 color: 'var(--color-text-primary)',
                 outline: 'none',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                marginBottom: '10px'
               }}
             />
-          </div>
-          {filteredSavedMaps.length === 0 ? (
-            <div style={{ padding: '14px', borderRadius: '14px', background: 'var(--color-background-primary)', fontSize: '12px', color: 'var(--color-text-secondary)', lineHeight: '1.6' }}>
-              {savedMaps.length === 0 ? 'No saved maps yet. Generate and save one from the editor.' : 'No saved maps match this search.'}
+            <textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              rows={isMobile ? 12 : 18}
+              placeholder={'Write Mermaid, or simple arrows:\n🩸 Anemia -> 🔎 Check MCV -> Microcytic'}
+              style={{
+                width: '100%',
+                padding: '13px 14px',
+                border: '0.5px solid var(--color-border-secondary)',
+                borderRadius: '12px',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                resize: 'vertical',
+                background: 'var(--color-background-secondary)',
+                color: 'var(--color-text-primary)',
+                outline: 'none',
+                boxSizing: 'border-box',
+                minHeight: isMobile ? '220px' : '360px'
+              }}
+            />
+            <div style={{ marginTop: '8px' }}>
+              <EmojiChips onPick={insertEmoji} compact={isMobile} />
             </div>
-          ) : (
-            <div style={{ display: 'grid', gap: '10px', minWidth: 0 }}>
-              {filteredSavedMaps.map(saved => (
-                <div key={saved.id} style={{ padding: '12px', borderRadius: '14px', background: 'var(--color-background-primary)', border: saved.id === currentMapId ? '1px solid #1D9E75' : '0.5px solid var(--color-border-tertiary)', minWidth: 0 }}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: isMobile ? 'stretch' : 'center', flexDirection: isMobile ? 'column' : 'row', minWidth: 0 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-primary)', lineHeight: '1.5', wordBreak: 'break-word' }}>
-                        {saved.title}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: '4px', lineHeight: '1.5', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {(saved.content || '').slice(0, 90) || 'No content'}
-                      </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+              <button
+                onClick={handleSave}
+                disabled={saving || !draft.trim()}
+                style={{
+                  padding: '9px 14px',
+                  background: saving ? '#82CBB4' : '#1D9E75',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '9px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: saving || !draft.trim() ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit'
+                }}
+              >
+                {saving ? 'Saving...' : currentMapId ? 'Update' : 'Save'}
+              </button>
+              <button onClick={copyMermaid} style={secondaryButtonStyle}>Copy Mermaid</button>
+              <button onClick={clearAll} style={secondaryButtonStyle}>Reset</button>
+              {isMobile && <button onClick={() => setFullscreenPreview(true)} style={secondaryButtonStyle}>Preview</button>}
+            </div>
+            <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--color-text-tertiary)', lineHeight: 1.6 }}>
+              Tip: add emoji directly in any node. Hermes/MCP can create emoji Mermaid too.
+            </div>
+
+            {currentMapId && (
+              <LinkedItemsPanel
+                sourceType="mindmap"
+                sourceId={currentMapId}
+                links={links}
+                setLinks={setLinks}
+                entities={entities}
+                onNavigate={onNavigate}
+                compact
+              />
+            )}
+
+            <div style={{ marginTop: '18px' }}>
+              <div style={{ fontSize: '11px', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--color-text-tertiary)', marginBottom: '8px' }}>
+                Saved Diagrams
+              </div>
+              <div style={{ position: 'relative', marginBottom: '10px' }}>
+                <i className="ti ti-search" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '12px', color: 'var(--color-text-tertiary)' }} />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search diagrams"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px 8px 30px',
+                    border: '0.5px solid var(--color-border-secondary)',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontFamily: 'inherit',
+                    background: 'var(--color-background-primary)',
+                    color: 'var(--color-text-primary)',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {filteredSavedMaps.length === 0 ? (
+                  <div style={{ padding: '12px', borderRadius: '10px', background: 'var(--color-background-secondary)', fontSize: '12px', color: 'var(--color-text-secondary)' }}>
+                    {savedMaps.length === 0 ? 'No saved diagrams yet.' : 'No diagrams match this search.'}
+                  </div>
+                ) : filteredSavedMaps.map(saved => (
+                  <div key={saved.id} style={{
+                    padding: '10px',
+                    borderRadius: '10px',
+                    background: saved.id === currentMapId ? '#E1F5EE' : 'var(--color-background-secondary)',
+                    border: saved.id === currentMapId ? '0.5px solid #9FE1CB' : '0.5px solid var(--color-border-tertiary)'
+                  }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: saved.id === currentMapId ? '#085041' : 'var(--color-text-primary)', marginBottom: '4px' }}>
+                      {saved.title || 'Untitled diagram'}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0, width: isMobile ? '100%' : 'auto' }}>
-                      <button
-                        onClick={() => handleLoad(saved)}
-                        style={{
-                          padding: '6px 10px',
-                          background: '#E1F5EE',
-                          color: '#085041',
-                          border: 'none',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          width: isMobile ? '100%' : 'auto'
-                        }}
-                      >
-                        Open
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSaved(saved.id)}
-                        style={{
-                          padding: '6px 9px',
-                          background: 'transparent',
-                          color: '#A24646',
-                          border: '0.5px solid rgba(162,70,70,0.18)',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          width: isMobile ? '100%' : 'auto'
-                        }}
-                      >
-                        Delete
-                      </button>
+                    <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', lineHeight: 1.5, whiteSpace: 'pre-wrap', maxHeight: '48px', overflow: 'hidden' }}>
+                      {(saved.content || '').slice(0, 120)}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button onClick={() => handleLoad(saved)} style={smallButtonStyle}>Open</button>
+                      <button onClick={() => handleDeleteSaved(saved.id)} style={{ ...smallButtonStyle, color: '#A32D2D' }}>Delete</button>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
+          </div>
+        )}
+
+        <div style={{
+          minHeight: 0,
+          overflow: 'auto',
+          padding: isMobile ? '12px' : '18px',
+          background: 'var(--color-background-primary)'
+        }}>
+          {isMobile && fullscreenPreview && (
+            <button onClick={() => setFullscreenPreview(false)} style={{ ...secondaryButtonStyle, marginBottom: '10px' }}>
+              Back to editor
+            </button>
           )}
+          <div style={{
+            minWidth: isMobile ? '680px' : 0,
+            borderRadius: '14px',
+            border: '0.5px solid var(--color-border-tertiary)',
+            background: 'var(--color-background-secondary)',
+            padding: isMobile ? '12px' : '18px',
+            overflow: 'auto'
+          }}>
+            <MermaidPreview code={mermaidCode} />
+          </div>
         </div>
-        </div>
-      )}
-
-      <div style={{
-        flex: isMobile && !isExpanded ? '0 0 auto' : 1,
-        minHeight: isMobile && !isExpanded ? '420px' : 0,
-        overflow: 'auto',
-        padding: canvasPadding,
-        background: isExpanded ? 'var(--color-background-secondary)' : 'var(--color-background-primary)'
-      }}>
-        {isMobile && (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
-            <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Map View
-            </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
-              {!isExpanded && (
-                <button
-                  onClick={() => setIsExpanded(true)}
-                  style={{
-                    padding: '7px 10px',
-                    background: 'var(--color-background-primary)',
-                    color: 'var(--color-text-secondary)',
-                    border: '0.5px solid var(--color-border-secondary)',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit'
-                  }}
-                >
-                  Expand
-                </button>
-              )}
-              {isExpanded && (
-                <button
-                  onClick={() => setIsExpanded(false)}
-                  style={{
-                    padding: '7px 10px',
-                    background: 'var(--color-background-primary)',
-                    color: 'var(--color-text-secondary)',
-                    border: '0.5px solid var(--color-border-secondary)',
-                    borderRadius: '10px',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit'
-                  }}
-                >
-                  Back to editor
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-        {layout ? (
-          <div
-            style={{
-              minWidth: isMobile ? `${Math.max(layout.width, 760)}px` : `${layout.width}px`,
-              background: 'radial-gradient(circle at top left, rgba(29,158,117,0.06), transparent 30%), var(--color-background-primary)',
-              border: '0.5px solid var(--color-border-tertiary)',
-              borderRadius: '24px',
-              overflow: 'hidden'
-            }}
-          >
-            <svg
-              viewBox={`0 0 ${layout.width} ${layout.height}`}
-              style={{
-                width: isMobile ? `${Math.max(layout.width, 760)}px` : '100%',
-                minWidth: `${layout.width}px`,
-                height: `${layout.height}px`,
-                display: 'block'
-              }}
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {layout.links.map((link, index) => {
-                if (!link.fromNode || !link.toNode) return null
-                const x1 = link.fromNode.x + link.fromNode.width
-                const y1 = link.fromNode.y + link.fromNode.height / 2
-                const x2 = link.toNode.x
-                const y2 = link.toNode.y + link.toNode.height / 2
-                const cx1 = x1 + 48
-                const cx2 = x2 - 48
-
-                return (
-                  <path
-                    key={`${link.from}-${link.to}-${index}`}
-                    d={`M ${x1} ${y1} C ${cx1} ${y1}, ${cx2} ${y2}, ${x2} ${y2}`}
-                    fill="none"
-                    stroke={link.color}
-                    strokeWidth="3"
-                    strokeOpacity="0.32"
-                  />
-                )
-              })}
-
-              {layout.nodes.map(node => {
-                const lines = splitLabel(node.label, node.depth === 0 ? 16 : 14)
-                const fill = node.depth === 0 ? '#173B33' : 'white'
-                const textColor = node.depth === 0 ? 'white' : '#23312D'
-                const stroke = node.depth === 0 ? '#173B33' : node.color
-                const chipFill = node.depth === 0 ? 'rgba(255,255,255,0.16)' : `${node.color}18`
-
-                return (
-                  <g key={node.id}>
-                    <rect
-                      x={node.x}
-                      y={node.y}
-                      rx="18"
-                      ry="18"
-                      width={node.width}
-                      height={node.height}
-                      fill={fill}
-                      stroke={stroke}
-                      strokeWidth="1.5"
-                    />
-                    <rect
-                      x={node.x + 12}
-                      y={node.y + 10}
-                      rx="999"
-                      ry="999"
-                      width="34"
-                      height="18"
-                      fill={chipFill}
-                    />
-                    <text
-                      x={node.x + 29}
-                      y={node.y + 23}
-                      textAnchor="middle"
-                      fontSize="9.5"
-                      fill={node.depth === 0 ? 'white' : node.color}
-                      fontFamily="'DM Sans', sans-serif"
-                      fontWeight="700"
-                    >
-                      {node.depth === 0 ? 'ROOT' : `L${node.depth}`}
-                    </text>
-                    {lines.map((line, index) => (
-                      <text
-                        key={`${node.id}-${index}`}
-                        x={node.x + node.width / 2}
-                        y={node.y + 36 + index * 14}
-                        textAnchor="middle"
-                        fontSize={node.depth === 0 ? '12.5' : '12'}
-                        fill={textColor}
-                        fontFamily="'DM Sans', sans-serif"
-                        fontWeight={node.depth === 0 ? '700' : '600'}
-                      >
-                        {line}
-                      </text>
-                    ))}
-                  </g>
-                )
-              })}
-            </svg>
-          </div>
-        ) : (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: isMobile ? '42px 18px' : '64px 24px',
-              borderRadius: '24px',
-              border: '0.5px dashed var(--color-border-secondary)',
-              background: 'linear-gradient(180deg, var(--color-background-secondary) 0%, var(--color-background-primary) 100%)',
-              color: 'var(--color-text-tertiary)'
-            }}
-          >
-            <i className="ti ti-git-fork" style={{ fontSize: '36px', display: 'block', marginBottom: '12px' }} />
-            <div style={{ fontFamily: "'Lora', serif", fontSize: '24px', color: 'var(--color-text-primary)', marginBottom: '8px' }}>
-              No map yet
-            </div>
-            <div style={{ fontSize: '14px', color: 'var(--color-text-secondary)', lineHeight: '1.7' }}>
-              Type connected paths on the left, then generate the map.
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
+}
+
+const secondaryButtonStyle = {
+  padding: '9px 12px',
+  background: 'var(--color-background-primary)',
+  color: 'var(--color-text-secondary)',
+  border: '0.5px solid var(--color-border-secondary)',
+  borderRadius: '9px',
+  fontSize: '12px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  fontFamily: 'inherit'
+}
+
+const smallButtonStyle = {
+  padding: '6px 9px',
+  background: 'var(--color-background-primary)',
+  color: 'var(--color-text-secondary)',
+  border: '0.5px solid var(--color-border-secondary)',
+  borderRadius: '8px',
+  fontSize: '11px',
+  cursor: 'pointer',
+  fontFamily: 'inherit'
 }

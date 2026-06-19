@@ -99,6 +99,19 @@ const TOOLS = [
     }
   },
   {
+    name: 'create_diagram',
+    description: 'สร้าง Mermaid diagram ใหม่ใน workspace เช่น flowchart, clinical algorithm, timeline, sequence diagram',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title:        { type: 'string', description: 'ชื่อ diagram' },
+        diagram_type: { type: 'string', enum: ['flowchart', 'algorithm', 'timeline', 'sequence', 'other'], description: 'ชนิดของ diagram' },
+        mermaid:      { type: 'string', description: 'Mermaid source code เช่น flowchart TD\\nA[Start] --> B[Next]' }
+      },
+      required: ['title', 'mermaid']
+    }
+  },
+  {
     name: 'add_book',
     description: 'เพิ่มหนังสือเข้า Digital Library (digital-library.uraree.com)',
     inputSchema: {
@@ -281,12 +294,28 @@ async function handleTool(name, input, env) {
         const type = line.startsWith('# ') ? 'heading' : line.startsWith('- ') ? 'bullet' : 'text'
         const text = line.replace(/^#+\s/, '').replace(/^-\s/, '')
         await db.execute(
-          'INSERT INTO blocks (id, note_id, type, content, position, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [crypto.randomUUID(), id, type, text, i, now]
+          'INSERT INTO blocks (id, note_id, type, content, done, position) VALUES (?, ?, ?, ?, ?, ?)',
+          [crypto.randomUUID(), id, type, text, 0, i]
         )
       }
     }
     return `📝 สร้าง note "${input.title}" แล้วค่ะ${tags.length ? ' tags: ' + tags.join(', ') : ''}\nURL: https://space.uraree.com`
+  }
+
+  if (name === 'create_diagram') {
+    const id = crypto.randomUUID()
+    const now = Date.now()
+    const title = input.title || 'Untitled diagram'
+    const content = input.mermaid || ''
+
+    if (!content.trim()) throw new Error('Mermaid content is required')
+
+    await db.execute(
+      'INSERT INTO mindmaps (id, title, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      [id, title, content, now, now]
+    )
+
+    return `📊 สร้าง diagram "${title}" แล้วค่ะ${input.diagram_type ? ' (' + input.diagram_type + ')' : ''}\nURL: https://space.uraree.com`
   }
 
   if (name === 'add_book') {
