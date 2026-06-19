@@ -50,6 +50,7 @@ export async function onRequestGet({ env }) {
         content TEXT NOT NULL,
         color TEXT NOT NULL DEFAULT 'teal',
         emoji TEXT NOT NULL DEFAULT '💡',
+        image_url TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL
       )`,
       `CREATE TABLE IF NOT EXISTS mindmaps (
@@ -161,6 +162,12 @@ export async function onRequestGet({ env }) {
 
     if (!todoColumnNames.has('attachment_url')) {
       await db.execute("ALTER TABLE todos ADD COLUMN attachment_url TEXT NOT NULL DEFAULT ''")
+    }
+
+    const { rows: ideaColumns } = await db.execute('PRAGMA table_info(ideas)')
+    const ideaColumnNames = new Set(ideaColumns.map(column => column.name))
+    if (!ideaColumnNames.has('image_url')) {
+      await db.execute("ALTER TABLE ideas ADD COLUMN image_url TEXT NOT NULL DEFAULT ''")
     }
 
     const { rows: projectColumns } = await db.execute('PRAGMA table_info(projects)')

@@ -114,7 +114,7 @@ function NoteItem({ note, isMobile = false }) {
 
 function TodoItem({ todo, isMobile = false }) {
   const attachment = todo.attachment_url || ''
-  const isImage = /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(attachment)
+  const isImage = /^data:image\//.test(attachment) || /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(attachment)
 
   return (
     <article style={itemStyle(isMobile)}>
@@ -151,6 +151,9 @@ function IdeaItem({ idea, isMobile = false }) {
         <span style={{ fontSize: isMobile ? '20px' : '22px', marginRight: '7px' }}>{idea.emoji || '💡'}</span>
         {idea.content}
       </p>
+      {idea.image_url && (
+        <img src={idea.image_url} alt="" style={{ width: isMobile ? '100%' : 'auto', maxWidth: '100%', maxHeight: isMobile ? '320px' : '420px', objectFit: 'contain', borderRadius: '12px', border: '0.5px solid #DDE5E1', marginTop: '12px' }} />
+      )}
     </article>
   )
 }
@@ -169,7 +172,7 @@ function DiagramItem({ diagram, itemId, isMobile = false }) {
 function CustomItem({ item, isMobile = false }) {
   const title = item.title || (item.display_type === 'image' ? 'Image' : item.display_type === 'link' ? 'Link' : 'Text')
   const url = item.url || item.item_id || ''
-  const isImage = item.display_type === 'image' || /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(url)
+  const isImage = item.display_type === 'image' || /^data:image\//.test(url) || /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(url)
   return (
     <article style={itemStyle(isMobile)}>
       <div style={labelStyle('#6A4710', '#FBF1DE')}><i className="ti ti-pencil" /> Custom</div>

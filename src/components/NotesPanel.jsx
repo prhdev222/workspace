@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { updateNote, deleteNote, syncToObsidian, pullFromObsidian, unsyncFromObsidian } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
-import { EmojiChips } from '../lib/emoji'
+import { EmojiChips, QUICK_EMOJIS } from '../lib/emoji'
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -803,6 +803,7 @@ export default function NotesPanel({
   const [activeBlockIdx, setActiveBlockIdx] = useState(null)
   const triggerLinkRef = useRef(null)
   const titleRef = useRef()
+  const imageInputRef = useRef()
 
   const note = notes.find(n => n.id === currentId)
   const availableTags = [...new Set(notes.flatMap(n => n.tags || []))]
@@ -996,6 +997,18 @@ export default function NotesPanel({
       const dataUrl = await readFileAsDataUrl(file)
       insertImageBlock(dataUrl)
     }
+  }
+
+  async function handleImageFiles(files) {
+    for (const file of Array.from(files || []).filter(f => f.type.startsWith('image/'))) {
+      const dataUrl = await readFileAsDataUrl(file)
+      insertImageBlock(dataUrl)
+    }
+  }
+
+  async function handleImageUpload(e) {
+    await handleImageFiles(e.target.files)
+    e.target.value = ''
   }
 
   // ── note ops ───────────────────────────────────────────────────────────────
@@ -1490,72 +1503,55 @@ export default function NotesPanel({
 
                 {/* title */}
                 <input ref={titleRef} value={title} onFocus={() => setActiveBlockIdx(null)} onChange={e => { setTitle(e.target.value); setDirty(true) }} placeholder="Untitled note…"
-                  style={{ fontFamily: "'Lora', serif", fontSize: isMobile ? (mobileFocusMode ? '24px' : '22px') : '26px', fontWeight: '500', color: 'var(--color-text-primary)', border: 'none', outline: 'none', background: 'transparent', width: '100%', marginBottom: mobileFocusMode ? '16px' : '10px', lineHeight: 1.3 }} />
-                <div style={{ margin: mobileFocusMode ? '0 0 14px' : '0 0 16px' }}>
-                  <EmojiChips onPick={insertEmoji} compact={isMobile} />
-                </div>
+                  style={{ fontFamily: "'Lora', serif", fontSize: isMobile ? (mobileFocusMode ? '24px' : '22px') : '26px', fontWeight: '500', color: 'var(--color-text-primary)', border: 'none', outline: 'none', background: 'transparent', width: '100%', marginBottom: mobileFocusMode ? '14px' : '12px', lineHeight: 1.3 }} />
 
-                {/* tags */}
-                {!(isMobile && mobileFocusMode) && <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
-                  {Object.entries(TAG_STYLES).map(([tag, s]) => (
-                    <span key={tag} onClick={() => toggleTag(tag)}
-                      style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '500', cursor: 'pointer', background: tags.includes(tag) ? s.bg : 'var(--color-background-secondary)', color: tags.includes(tag) ? s.color : 'var(--color-text-tertiary)', border: `0.5px solid ${tags.includes(tag) ? s.color + '44' : 'var(--color-border-tertiary)'}` }}>
-                      {s.label}
-                    </span>
-                  ))}
-                </div>}
+                <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
 
-                {!metaHidden && !(isMobile && mobileFocusMode) && <>{/* subpage controls */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
-                  <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-                    {note?.parent_id ? 'Subpage in nested notes' : 'Top-level page'}
-                  </div>
-                  <button onClick={handleCreateSubpage}
-                    style={{ padding: '6px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <i className="ti ti-indent-increase" /> Add subpage
-                  </button>
-                </div>
-
-                {/* parent selector */}
-                <div style={{ marginBottom: '18px' }}>
-                  {!isMobile ? (
-                    <>
-                      <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Parent page</div>
-                      <select value={parentId} onChange={e => { setParentId(e.target.value); setDirty(true) }}
-                        style={{ width: '100%', padding: '9px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: '10px', fontSize: '12px', fontFamily: 'inherit', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', outline: 'none' }}>
-                        <option value="">Top-level page</option>
-                        {parentOptions.map(n => <option key={n.id} value={n.id}>{`${'— '.repeat(n.depth)}${n.title || 'Untitled note'}`}</option>)}
-                      </select>
-                    </>
-                  ) : (
-                    <div style={{ display: 'grid', gap: '8px' }}>
-                      <button onClick={() => setMobileMoveOpen(p => !p)}
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: '12px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontWeight: '600' }}>Move page</span>
-                        <i className={`ti ${mobileMoveOpen ? 'ti-chevron-up' : 'ti-chevron-down'}`} />
+                {!(isMobile && mobileFocusMode) && (
+                  <div style={{
+                    display: 'grid',
+                    gap: '10px',
+                    padding: '10px 12px',
+                    border: '0.5px solid var(--color-border-tertiary)',
+                    borderRadius: '12px',
+                    background: 'var(--color-background-secondary)',
+                    marginBottom: '14px'
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button onClick={() => imageInputRef.current?.click()}
+                        style={{ padding: '7px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <i className="ti ti-photo-plus" /> Picture
                       </button>
-                      {mobileMoveOpen && (
-                        <div style={{ display: 'grid', gap: '8px' }}>
-                          <select value={mobileMoveTargetId} onChange={e => setMobileMoveTargetId(e.target.value)}
-                            style={{ width: '100%', padding: '9px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: '10px', fontSize: '12px', fontFamily: 'inherit', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', outline: 'none' }}>
-                            <option value="">Choose target page</option>
-                            {parentOptions.map(n => <option key={`move-${n.id}`} value={n.id}>{`${'— '.repeat(n.depth)}${n.title || 'Untitled note'}`}</option>)}
+                      <button onClick={handleCreateSubpage}
+                        style={{ padding: '7px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <i className="ti ti-indent-increase" /> Subpage
+                      </button>
+                      <div style={{ width: '1px', height: '26px', background: 'var(--color-border-tertiary)' }} />
+                      <EmojiChips emojis={QUICK_EMOJIS.slice(0, 8)} onPick={insertEmoji} compact />
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      {Object.entries(TAG_STYLES).map(([tag, s]) => (
+                        <button key={tag} onClick={() => toggleTag(tag)}
+                          style={{ padding: '5px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', background: tags.includes(tag) ? s.bg : 'var(--color-background-primary)', color: tags.includes(tag) ? s.color : 'var(--color-text-tertiary)', border: `0.5px solid ${tags.includes(tag) ? s.color + '44' : 'var(--color-border-secondary)'}`, fontFamily: 'inherit' }}>
+                          {s.label}
+                        </button>
+                      ))}
+                      {!metaHidden && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: isMobile ? 0 : 'auto', flex: isMobile ? '1 1 100%' : '0 1 360px', minWidth: isMobile ? '100%' : '260px' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', whiteSpace: 'nowrap' }}>
+                            <i className="ti ti-corner-down-right" /> In
+                          </span>
+                          <select value={parentId} onChange={e => { setParentId(e.target.value); setDirty(true) }}
+                            style={{ flex: 1, minWidth: 0, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: '8px', fontSize: '12px', fontFamily: 'inherit', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', outline: 'none' }}>
+                            <option value="">Top-level</option>
+                            {parentOptions.map(n => <option key={n.id} value={n.id}>{`${'— '.repeat(n.depth)}${n.title || 'Untitled note'}`}</option>)}
                           </select>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                            {['before','inside','after'].map(opt => (
-                              <button key={opt} onClick={() => setMobileMovePlacement(opt)}
-                                style={{ padding: '8px 6px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: mobileMovePlacement === opt ? '#E1F5EE' : 'var(--color-background-secondary)', color: mobileMovePlacement === opt ? '#085041' : 'var(--color-text-secondary)', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit', textTransform: 'capitalize' }}>{opt}</button>
-                            ))}
-                          </div>
-                          <button onClick={handleMobileMove} disabled={!mobileMoveTargetId}
-                            style={{ padding: '9px 12px', borderRadius: '10px', border: 'none', background: !mobileMoveTargetId ? '#B9C5C0' : '#173B33', color: 'white', fontSize: '12px', cursor: !mobileMoveTargetId ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
-                            Move current page
-                          </button>
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* Obsidian sync status */}
                 {note?.obsidian_synced ? (
@@ -1594,7 +1590,6 @@ export default function NotesPanel({
 
                 {/* linked items */}
                 <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} isMobile={true} />
-                </>}
                 <div style={{ marginTop: '16px' }}>
                   {blocks.length === 0 && (
                     <div style={{ padding: isMobile ? '14px 0 6px' : '18px 0 8px' }}>

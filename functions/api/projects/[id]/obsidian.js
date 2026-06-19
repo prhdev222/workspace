@@ -31,6 +31,10 @@ function slugify(input) {
     .slice(0, 60) || 'untitled'
 }
 
+function isImageUrl(value) {
+  return /^data:image\//.test(value || '') || /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(value || '')
+}
+
 function toBase64(str) {
   const bytes = new TextEncoder().encode(str)
   let binary = ''
@@ -140,11 +144,12 @@ function projectToMarkdown(project) {
       lines.push(`- Status: ${entity.done ? 'done' : 'open'}`)
       if (entity.due_date || entity.due_label) lines.push(`- Date: ${entity.due_date || entity.due_label}`)
       if (entity.location) lines.push(`- Location: ${entity.location}`)
-      if (entity.attachment_url) lines.push(`- Attachment: ${entity.attachment_url}`)
+      if (entity.attachment_url) lines.push(isImageUrl(entity.attachment_url) ? `![Attachment](${entity.attachment_url})` : `- Attachment: ${entity.attachment_url}`)
       lines.push('')
     } else if (item.item_type === 'ideas') {
       lines.push(`## ${entity.emoji || '💡'} Idea`, '')
       lines.push(entity.content || '', '')
+      if (entity.image_url) lines.push(`![Idea image](${entity.image_url})`, '')
     } else if (item.item_type === 'mindmap') {
       lines.push(`## 📊 ${entity.title || 'Diagram'}`, '')
       lines.push('```mermaid', entity.content || '', '```', '')

@@ -23,6 +23,7 @@ export function EmojiChips({ emojis = QUICK_EMOJIS, onPick, compact = false }) {
         <button
           key={emoji}
           type="button"
+          onMouseDown={e => e.preventDefault()}
           onClick={() => onPick?.(emoji)}
           title={`Insert ${emoji}`}
           aria-label={`Insert ${emoji}`}

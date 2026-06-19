@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createIdea, deleteIdea } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
 import { EmojiChips, QUICK_EMOJIS } from '../lib/emoji'
@@ -70,7 +70,9 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
   const [text, setText] = useState('')
   const [color, setColor] = useState('teal')
   const [emoji, setEmoji] = useState('💡')
+  const [imageUrl, setImageUrl] = useState('')
   const [search, setSearch] = useState(externalSearch)
+  const imageInputRef = useRef()
 
   useEffect(() => {
     setSearch(externalSearch)
@@ -85,12 +87,29 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
   async function add() {
     if (!text.trim()) return
     try {
-      const idea = await createIdea({ content: text.trim(), color, emoji })
+      const idea = await createIdea({ content: text.trim(), color, emoji, image_url: imageUrl })
       setIdeas(prev => [idea, ...prev])
       setText('')
+      setImageUrl('')
     } catch (e) {
       alert(e.message)
     }
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = e => resolve(e.target.result)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleImageUpload(e) {
+    const file = Array.from(e.target.files || []).find(item => item.type.startsWith('image/'))
+    if (!file) return
+    setImageUrl(await readFileAsDataUrl(file))
+    e.target.value = ''
   }
 
   async function remove(id) {
@@ -184,10 +203,20 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
               minHeight: '160px'
             }}
           />
+          <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
           <div style={{ marginTop: '10px' }}>
             <div style={{ fontSize: '11px', color: '#7E6C57', marginBottom: '7px' }}>Emoji tag</div>
             <EmojiChips emojis={QUICK_EMOJIS} onPick={setEmoji} />
           </div>
+          {imageUrl && (
+            <div style={{ marginTop: '10px', position: 'relative' }}>
+              <img src={imageUrl} alt="" style={{ width: '100%', maxHeight: '220px', objectFit: 'cover', borderRadius: '12px', border: '1px solid rgba(77, 57, 27, 0.12)' }} />
+              <button onClick={() => setImageUrl('')}
+                style={{ position: 'absolute', top: '8px', right: '8px', border: 'none', background: 'rgba(255,255,255,0.88)', color: '#7A2747', borderRadius: '8px', padding: '5px 8px', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                Remove
+              </button>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
             <div style={{
               width: '34px',
@@ -220,6 +249,25 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
               ))}
             </div>
             <div style={{ fontSize: '11px', color: '#7E6C57' }}>{text.trim().length} characters</div>
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              style={{
+                padding: '8px 11px',
+                background: 'rgba(255,255,255,0.82)',
+                color: '#4D391B',
+                border: '1px solid rgba(77, 57, 27, 0.15)',
+                borderRadius: '10px',
+                fontSize: '12px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <i className="ti ti-photo-plus" /> Picture
+            </button>
             <button
               onClick={add}
               style={{
@@ -348,6 +396,13 @@ export default function IdeasPanel({ ideas, setIdeas, isMobile = false, external
                 <div style={{ fontSize: '16px', lineHeight: '1.75', color: palette.body, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                   {idea.content}
                 </div>
+                {idea.image_url && (
+                  <img
+                    src={idea.image_url}
+                    alt=""
+                    style={{ width: '100%', maxHeight: '220px', objectFit: 'cover', borderRadius: '12px', marginTop: '12px', border: '1px solid rgba(255,255,255,0.5)' }}
+                  />
+                )}
 
                 <div style={{ marginTop: 'auto', paddingTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                   <span

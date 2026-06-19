@@ -1,5 +1,5 @@
 // src/components/TodoPanel.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createTodo, updateTodo, deleteTodo } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
 import { EmojiChips } from '../lib/emoji'
@@ -82,6 +82,10 @@ function getAgendaSortValue(todo) {
   return `${date}T${time}`
 }
 
+function isImageAttachment(value) {
+  return /^data:image\//.test(value || '') || /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(value || '')
+}
+
 export default function TodoPanel({ todos, setTodos, isMobile = false, externalSearch = '', selectedTodoId = null, setSelectedTodoId, links = [], setLinks, entities, onNavigate }) {
   const [agendaView, setAgendaView] = useState('today')
   const [agendaDate, setAgendaDate] = useState(toIsoDate())
@@ -97,6 +101,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
   const [newLocation, setNewLocation] = useState('')
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
   const [search, setSearch] = useState(externalSearch)
+  const attachmentInputRef = useRef()
 
   const done = todos.filter(t => t.done).length
   const total = todos.length
@@ -185,6 +190,22 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
 
   function insertEmoji(emoji) {
     setNewText(prev => prev ? `${prev} ${emoji}` : `${emoji} `)
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = e => resolve(e.target.result)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  async function handleAttachmentUpload(e) {
+    const file = Array.from(e.target.files || []).find(item => item.type.startsWith('image/'))
+    if (!file) return
+    setNewAttachmentUrl(await readFileAsDataUrl(file))
+    e.target.value = ''
   }
 
   async function remove(id) {
@@ -313,24 +334,33 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
                 </div>
               )}
               {t.attachment_url && (
-                <a
-                  href={t.attachment_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    marginTop: '6px',
-                    fontSize: '11px',
-                    color: '#1D9E75',
-                    textDecoration: 'none'
-                  }}
-                >
-                  <i className="ti ti-link" style={{ fontSize: '11px' }} />
-                  Attachment
-                </a>
+                isImageAttachment(t.attachment_url) ? (
+                  <img
+                    src={t.attachment_url}
+                    alt=""
+                    onClick={e => { e.stopPropagation(); window.open(t.attachment_url, '_blank') }}
+                    style={{ display: 'block', maxWidth: '220px', maxHeight: '160px', objectFit: 'cover', borderRadius: '10px', marginTop: '8px', border: '0.5px solid var(--color-border-tertiary)', cursor: 'pointer' }}
+                  />
+                ) : (
+                  <a
+                    href={t.attachment_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      marginTop: '6px',
+                      fontSize: '11px',
+                      color: '#1D9E75',
+                      textDecoration: 'none'
+                    }}
+                  >
+                    <i className="ti ti-link" style={{ fontSize: '11px' }} />
+                    Attachment
+                  </a>
+                )
               )}
             </div>
             <button onClick={e => { e.stopPropagation(); remove(t.id) }} style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: '13px', opacity: 0.5 }}>
@@ -788,6 +818,37 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
               minWidth: isMobile ? '100%' : '180px'
             }}
           />
+          <input ref={attachmentInputRef} type="file" accept="image/*" onChange={handleAttachmentUpload} style={{ display: 'none' }} />
+          <button
+            type="button"
+            onClick={() => attachmentInputRef.current?.click()}
+            style={{
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: '0.5px solid var(--color-border-secondary)',
+              background: 'var(--color-background-primary)',
+              color: 'var(--color-text-primary)',
+              fontSize: '12px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              width: isMobile ? '100%' : 'auto',
+              justifyContent: 'center'
+            }}
+          >
+            <i className="ti ti-photo-plus" /> Picture
+          </button>
+          {isImageAttachment(newAttachmentUrl) && (
+            <div style={{ width: isMobile ? '100%' : '180px', position: 'relative' }}>
+              <img src={newAttachmentUrl} alt="" style={{ width: '100%', maxHeight: '120px', objectFit: 'cover', borderRadius: '8px', border: '0.5px solid var(--color-border-tertiary)' }} />
+              <button onClick={() => setNewAttachmentUrl('')}
+                style={{ position: 'absolute', top: '5px', right: '5px', border: 'none', background: 'rgba(255,255,255,0.88)', color: '#A32D2D', borderRadius: '6px', padding: '3px 6px', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                Remove
+              </button>
+            </div>
+          )}
           <button onClick={add} style={{
             padding: '6px 16px', background: '#1D9E75', color: 'white', border: 'none',
             borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit',
