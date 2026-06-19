@@ -77,12 +77,13 @@ export async function onRequestPut({ params, request, env }) {
 
     // Update note metadata
     await db.execute(
-      'UPDATE notes SET title = ?, tags = ?, parent_id = ?, sort_order = ?, updated_at = ? WHERE id = ?',
+      'UPDATE notes SET title = ?, tags = ?, parent_id = ?, sort_order = ?, obsidian_auto_sync = ?, updated_at = ? WHERE id = ?',
       [
         body.title ?? current.title ?? 'Untitled',
         JSON.stringify(body.tags ?? JSON.parse(current.tags || '[]')),
         body.parent_id !== undefined ? nextParentId : current.parent_id,
         body.sort_order ?? current.sort_order ?? current.created_at ?? now,
+        typeof body.obsidian_auto_sync === 'boolean' ? (body.obsidian_auto_sync ? 1 : 0) : (current.obsidian_auto_sync === '1' || current.obsidian_auto_sync === 1 ? 1 : 0),
         now,
         params.id
       ]

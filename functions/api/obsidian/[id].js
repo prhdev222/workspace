@@ -269,7 +269,7 @@ export async function onRequestDelete({ params, env }) {
   try {
     const db = getDb(env)
     await db.execute(
-      'UPDATE notes SET obsidian_synced = 0, obsidian_path = NULL, obsidian_sha = NULL, obsidian_synced_at = NULL WHERE id = ?',
+      'UPDATE notes SET obsidian_synced = 0, obsidian_auto_sync = 0, obsidian_path = NULL, obsidian_sha = NULL, obsidian_synced_at = NULL WHERE id = ?',
       [params.id]
     )
     return json({ ok: true })

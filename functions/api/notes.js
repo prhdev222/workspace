@@ -49,7 +49,7 @@ export async function onRequestPost({ request, env }) {
       [id, body.title || 'Untitled', JSON.stringify(body.tags || []), parentId, sortOrder, now, now]
     )
 
-    return json({ id, title: body.title || 'Untitled', tags: body.tags || [], parent_id: parentId, sort_order: sortOrder, blocks: [], created_at: now, updated_at: now })
+    return json({ id, title: body.title || 'Untitled', tags: body.tags || [], parent_id: parentId, sort_order: sortOrder, obsidian_auto_sync: 0, blocks: [], created_at: now, updated_at: now })
   } catch (e) {
     return json({ error: e.message }, 500)
   }

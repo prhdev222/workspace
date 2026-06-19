@@ -15,6 +15,7 @@ export async function onRequestGet({ env }) {
         tags TEXT NOT NULL DEFAULT '[]',
         parent_id TEXT,
         sort_order INTEGER NOT NULL DEFAULT 0,
+        obsidian_auto_sync INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         FOREIGN KEY(parent_id) REFERENCES notes(id) ON DELETE SET NULL
@@ -66,6 +67,34 @@ export async function onRequestGet({ env }) {
         to_id TEXT NOT NULL,
         label TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS projects (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        description TEXT NOT NULL DEFAULT '',
+        emoji TEXT NOT NULL DEFAULT '📚',
+        is_public INTEGER NOT NULL DEFAULT 1,
+        obsidian_synced INTEGER NOT NULL DEFAULT 0,
+        obsidian_auto_sync INTEGER NOT NULL DEFAULT 0,
+        obsidian_path TEXT,
+        obsidian_sha TEXT,
+        obsidian_synced_at INTEGER,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE TABLE IF NOT EXISTS project_items (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        item_type TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL DEFAULT '',
+        url TEXT NOT NULL DEFAULT '',
+        display_type TEXT NOT NULL DEFAULT '',
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE
       )`
     ]
 
@@ -83,6 +112,9 @@ export async function onRequestGet({ env }) {
     if (!noteColumnNames.has('sort_order')) {
       await db.execute('ALTER TABLE notes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0')
       await db.execute('UPDATE notes SET sort_order = created_at WHERE sort_order = 0')
+    }
+    if (!noteColumnNames.has('obsidian_auto_sync')) {
+      await db.execute('ALTER TABLE notes ADD COLUMN obsidian_auto_sync INTEGER NOT NULL DEFAULT 0')
     }
 
     // Obsidian sync columns (Migration 4)
@@ -129,6 +161,39 @@ export async function onRequestGet({ env }) {
 
     if (!todoColumnNames.has('attachment_url')) {
       await db.execute("ALTER TABLE todos ADD COLUMN attachment_url TEXT NOT NULL DEFAULT ''")
+    }
+
+    const { rows: projectColumns } = await db.execute('PRAGMA table_info(projects)')
+    const projectColumnNames = new Set(projectColumns.map(column => column.name))
+    if (!projectColumnNames.has('obsidian_auto_sync')) {
+      await db.execute('ALTER TABLE projects ADD COLUMN obsidian_auto_sync INTEGER NOT NULL DEFAULT 0')
+    }
+    if (!projectColumnNames.has('obsidian_synced')) {
+      await db.execute('ALTER TABLE projects ADD COLUMN obsidian_synced INTEGER NOT NULL DEFAULT 0')
+    }
+    if (!projectColumnNames.has('obsidian_path')) {
+      await db.execute('ALTER TABLE projects ADD COLUMN obsidian_path TEXT')
+    }
+    if (!projectColumnNames.has('obsidian_sha')) {
+      await db.execute('ALTER TABLE projects ADD COLUMN obsidian_sha TEXT')
+    }
+    if (!projectColumnNames.has('obsidian_synced_at')) {
+      await db.execute('ALTER TABLE projects ADD COLUMN obsidian_synced_at INTEGER')
+    }
+
+    const { rows: projectItemColumns } = await db.execute('PRAGMA table_info(project_items)')
+    const projectItemColumnNames = new Set(projectItemColumns.map(column => column.name))
+    if (!projectItemColumnNames.has('title')) {
+      await db.execute("ALTER TABLE project_items ADD COLUMN title TEXT NOT NULL DEFAULT ''")
+    }
+    if (!projectItemColumnNames.has('content')) {
+      await db.execute("ALTER TABLE project_items ADD COLUMN content TEXT NOT NULL DEFAULT ''")
+    }
+    if (!projectItemColumnNames.has('url')) {
+      await db.execute("ALTER TABLE project_items ADD COLUMN url TEXT NOT NULL DEFAULT ''")
+    }
+    if (!projectItemColumnNames.has('display_type')) {
+      await db.execute("ALTER TABLE project_items ADD COLUMN display_type TEXT NOT NULL DEFAULT ''")
     }
 
     return json({ ok: true, message: 'Tables created successfully' })

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { updateNote, deleteNote, syncToObsidian, pullFromObsidian, unsyncFromObsidian } from '../lib/api'
 import LinkedItemsPanel from './LinkedItemsPanel'
+import { EmojiChips } from '../lib/emoji'
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -39,6 +40,52 @@ const SHORTCUTS = [
   { keys: ['⌘','/'],  action: 'Slash menu' },
   { keys: ['⌘','S'],  action: 'Save note' },
   { keys: ['⌘','⏎'],  action: 'New block below' },
+]
+
+const STARTER_TEMPLATES = [
+  {
+    id: 'blank',
+    label: 'Start writing',
+    icon: 'ti-pencil',
+    blocks: [
+      { type: 'text', text: '', done: false }
+    ]
+  },
+  {
+    id: 'lecture',
+    label: 'Lecture note',
+    icon: 'ti-school',
+    tag: 'lecture',
+    blocks: [
+      { type: 'heading', text: 'Key points', done: false },
+      { type: 'bullet', text: '', done: false },
+      { type: 'heading', text: 'Questions', done: false },
+      { type: 'todo', text: '', done: false }
+    ]
+  },
+  {
+    id: 'clinical',
+    label: 'Clinical note',
+    icon: 'ti-stethoscope',
+    tag: 'clinical',
+    blocks: [
+      { type: 'heading', text: 'Summary', done: false },
+      { type: 'text', text: '', done: false },
+      { type: 'heading', text: 'Plan', done: false },
+      { type: 'todo', text: '', done: false }
+    ]
+  },
+  {
+    id: 'tasks',
+    label: 'Task list',
+    icon: 'ti-list-check',
+    tag: 'todo',
+    blocks: [
+      { type: 'todo', text: '', done: false },
+      { type: 'todo', text: '', done: false },
+      { type: 'todo', text: '', done: false }
+    ]
+  }
 ]
 
 // ─── tree / sort helpers ─────────────────────────────────────────────────────
@@ -522,6 +569,7 @@ function RichBlock({
   onDragStart, onDragOver, onDrop,
   isDragging, isDropTarget, dropPosition,
   triggerLinkRef,
+  onFocus,
 }) {
   const ref = useRef()
   const [slashMenu, setSlashMenu] = useState(null)
@@ -699,6 +747,7 @@ function RichBlock({
             data-editor-area
             onKeyDown={handleKeyDown}
             onInput={handleInput}
+            onFocus={() => onFocus?.(index)}
             onBlur={e => onTextChange(index, e.target.innerHTML)}
             style={getTextStyle()}
             data-placeholder={
@@ -732,6 +781,8 @@ export default function NotesPanel({
   const [tags, setTags] = useState([])
   const [blocks, setBlocks] = useState([])
   const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState(null)
   const [obsidianSyncing, setObsidianSyncing] = useState(false)
   const [mobileTagFilter, setMobileTagFilter] = useState('all')
   const [search, setSearch] = useState(externalSearch)
@@ -746,8 +797,10 @@ export default function NotesPanel({
   const [blockDropTarget, setBlockDropTarget] = useState(null)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [readMode, setReadMode] = useState(false)
+  const [mobileFocusMode, setMobileFocusMode] = useState(false)
   const [sidebarHidden, setSidebarHidden] = useState(false)
   const [metaHidden, setMetaHidden] = useState(false)
+  const [activeBlockIdx, setActiveBlockIdx] = useState(null)
   const triggerLinkRef = useRef(null)
   const titleRef = useRef()
 
@@ -772,7 +825,8 @@ export default function NotesPanel({
       setTitle(note.title); setTags(note.tags || [])
       setBlocks((note.blocks || []).map(b => ({ ...b, text: b.content || b.text || '' })))
       setParentId(note.parent_id || ''); setMobileMoveTargetId(note.parent_id || '')
-    } else { setTitle(''); setTags([]); setBlocks([]); setParentId(''); setMobileMoveTargetId('') }
+      setDirty(false); setLastSavedAt(null)
+    } else { setTitle(''); setTags([]); setBlocks([]); setParentId(''); setMobileMoveTargetId(''); setDirty(false); setLastSavedAt(null) }
   }, [currentId, note])
 
   useEffect(() => { setSearch(externalSearch) }, [externalSearch])
@@ -798,7 +852,7 @@ export default function NotesPanel({
     function onKey(e) {
       const isMac = navigator.platform.toLowerCase().includes('mac') || navigator.userAgent.includes('Mac')
       const mod = isMac ? e.metaKey : e.ctrlKey
-      if (mod && e.key === 's') { e.preventDefault(); if (currentId) save() }
+      if (mod && e.key === 's') { e.preventDefault(); if (currentId) saveNote() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -808,6 +862,7 @@ export default function NotesPanel({
 
   function addBlock(type) {
     setBlocks(prev => [...prev, { id: crypto.randomUUID(), type, text: '', done: false }])
+    setDirty(true)
     // Auto-focus the new block on mobile so the keyboard and format bar appear
     if (isMobile) {
       setTimeout(() => {
@@ -823,22 +878,61 @@ export default function NotesPanel({
       next.splice(idx + 1, 0, { id: crypto.randomUUID(), type: 'text', text: '', done: false })
       return next
     })
+    setDirty(true)
   }
 
   function updateBlockText(idx, html) {
     setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, text: html } : b))
+    setDirty(true)
+  }
+
+  function insertEmoji(emoji) {
+    const active = document.activeElement
+    if (active === titleRef.current) {
+      const start = active.selectionStart ?? title.length
+      const end = active.selectionEnd ?? title.length
+      const next = `${title.slice(0, start)}${emoji}${title.slice(end)}`
+      setTitle(next)
+      setDirty(true)
+      setTimeout(() => {
+        titleRef.current?.focus()
+        titleRef.current?.setSelectionRange(start + emoji.length, start + emoji.length)
+      }, 0)
+      return
+    }
+
+    if (active?.isContentEditable) {
+      active.focus()
+      document.execCommand('insertText', false, emoji)
+      if (activeBlockIdx !== null) updateBlockText(activeBlockIdx, active.innerHTML)
+      return
+    }
+
+    if (activeBlockIdx !== null && blocks[activeBlockIdx]) {
+      setBlocks(prev => prev.map((block, index) => index === activeBlockIdx ? { ...block, text: `${block.text || ''}${emoji}` } : block))
+    } else if (blocks.length) {
+      setBlocks(prev => prev.map((block, index) => index === prev.length - 1 ? { ...block, text: `${block.text || ''}${emoji}` } : block))
+      setActiveBlockIdx(blocks.length - 1)
+    } else {
+      setBlocks([{ id: crypto.randomUUID(), type: 'text', text: emoji, done: false }])
+      setActiveBlockIdx(0)
+    }
+    setDirty(true)
   }
 
   function toggleBlockDone(idx) {
     setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, done: !b.done } : b))
+    setDirty(true)
   }
 
   function changeBlockType(idx, type) {
     setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, type } : b))
+    setDirty(true)
   }
 
   function deleteBlock(idx) {
     setBlocks(prev => prev.filter((_, i) => i !== idx))
+    setDirty(true)
   }
 
   // ── block drag-reorder (desktop only) ─────────────────────────────────────
@@ -862,12 +956,14 @@ export default function NotesPanel({
       return next
     })
     setDraggedBlockIdx(null); setBlockDropTarget(null)
+    setDirty(true)
   }
 
   // ── image drop / paste ────────────────────────────────────────────────────
 
   function insertImageBlock(dataUrl) {
     setBlocks(prev => [...prev, { id: crypto.randomUUID(), type: 'image', text: dataUrl, done: false }])
+    setDirty(true)
   }
 
   function readFileAsDataUrl(file) {
@@ -906,25 +1002,70 @@ export default function NotesPanel({
 
   function toggleTag(tag) {
     setTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
+    setDirty(true)
   }
 
   function toggleCollapsed(id) {
     setCollapsedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
   }
 
-  async function save() {
-    if (!currentId) return
+  function applyStarterTemplate(template) {
+    setBlocks(template.blocks.map(block => ({ ...block, id: crypto.randomUUID() })))
+    if (template.tag) setTags(prev => prev.includes(template.tag) ? prev : [...prev, template.tag])
+    setDirty(true)
+    setTimeout(() => {
+      const firstEditable = document.querySelector('[contenteditable="true"]')
+      firstEditable?.focus()
+    }, 80)
+  }
+
+  async function pushNoteToObsidian({ silent = false } = {}) {
+    if (!currentId) return false
+    setObsidianSyncing(true)
+    try {
+      const result = await syncToObsidian(currentId)
+      onSaved(currentId, { obsidian_synced: 1, obsidian_path: result.path, obsidian_synced_at: result.synced_at, updated_at: Date.now() })
+      return true
+    } catch (e) {
+      if (!silent) alert('Sync to Obsidian failed: ' + e.message)
+      return false
+    } finally {
+      setObsidianSyncing(false)
+    }
+  }
+
+  async function saveNote({ skipAutoSync = false, showAutoSyncErrors = true } = {}) {
+    if (!currentId) return false
     setSaving(true)
     try {
       const resolvedParentId = parentId || null
+      const savedBlocks = blocks.map((b, i) => ({ id: b.id || crypto.randomUUID(), type: b.type, content: b.text, done: b.done, position: i }))
       await updateNote(currentId, {
         title: title || 'Untitled', tags, parent_id: resolvedParentId,
-        blocks: blocks.map((b, i) => ({ id: b.id || crypto.randomUUID(), type: b.type, content: b.text, done: b.done, position: i }))
+        blocks: savedBlocks
       })
-      onSaved(currentId, { title: title || 'Untitled', tags, parent_id: resolvedParentId, updated_at: Date.now() })
-    } catch (e) { alert('Save failed: ' + e.message) }
-    finally { setSaving(false) }
+      onSaved(currentId, { title: title || 'Untitled', tags, parent_id: resolvedParentId, blocks: savedBlocks, updated_at: Date.now() })
+      setDirty(false)
+      setLastSavedAt(new Date())
+      if (!skipAutoSync && note?.obsidian_auto_sync) {
+        await pushNoteToObsidian({ silent: !showAutoSyncErrors })
+      }
+      return true
+    } catch (e) {
+      alert('Save failed: ' + e.message)
+      return false
+    } finally { setSaving(false) }
   }
+
+  async function save() {
+    return saveNote()
+  }
+
+  useEffect(() => {
+    if (!currentId || !dirty || saving) return
+    const timer = setTimeout(() => { saveNote({ showAutoSyncErrors: false }) }, 1200)
+    return () => clearTimeout(timer)
+  }, [currentId, dirty, saving, title, tags, blocks, parentId])
 
   async function handleDelete() {
     if (!currentId || !confirm('Delete this note?')) return
@@ -934,13 +1075,9 @@ export default function NotesPanel({
 
   async function handleSyncToObsidian() {
     if (!currentId) return
-    setObsidianSyncing(true)
-    try {
-      await save()
-      const result = await syncToObsidian(currentId)
-      onSaved(currentId, { obsidian_synced: 1, obsidian_path: result.path, obsidian_synced_at: result.synced_at, updated_at: Date.now() })
-    } catch (e) { alert('Sync to Obsidian failed: ' + e.message) }
-    finally { setObsidianSyncing(false) }
+    const saved = await saveNote({ skipAutoSync: true })
+    if (!saved) return
+    await pushNoteToObsidian()
   }
 
   async function handlePullFromObsidian() {
@@ -959,8 +1096,22 @@ export default function NotesPanel({
     if (!currentId || !confirm('Disconnect this note from Obsidian? (The file in Obsidian will stay)')) return
     try {
       await unsyncFromObsidian(currentId)
-      onSaved(currentId, { obsidian_synced: 0, obsidian_path: null, obsidian_synced_at: null })
+      onSaved(currentId, { obsidian_synced: 0, obsidian_auto_sync: 0, obsidian_path: null, obsidian_synced_at: null })
     } catch (e) { alert('Unsync failed: ' + e.message) }
+  }
+
+  async function handleToggleAutoSync() {
+    if (!currentId) return
+    const nextValue = !note?.obsidian_auto_sync
+    try {
+      await updateNote(currentId, { obsidian_auto_sync: nextValue })
+      onSaved(currentId, { obsidian_auto_sync: nextValue, updated_at: Date.now() })
+      if (nextValue && !dirty) {
+        await pushNoteToObsidian()
+      }
+    } catch (e) {
+      alert('Auto-sync update failed: ' + e.message)
+    }
   }
 
   async function handleCreateSubpage() { if (currentId) await onNew(currentId) }
@@ -1072,13 +1223,22 @@ export default function NotesPanel({
       {isMobile && (
         <MobileFormatBar
           onAddBlock={addBlock}
-          onSave={save}
+          onSave={saveNote}
           saving={saving}
           hasNote={!!currentId}
         />
       )}
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row', position: 'relative' }}>
+      <div style={{
+        display: 'flex',
+        flex: 1,
+        overflow: 'hidden',
+        flexDirection: isMobile ? 'column' : 'row',
+        position: isMobile && mobileFocusMode ? 'fixed' : 'relative',
+        inset: isMobile && mobileFocusMode ? 0 : 'auto',
+        zIndex: isMobile && mobileFocusMode ? 9965 : 'auto',
+        background: 'var(--color-background-primary)'
+      }}>
 
         {/* sidebar toggle button — desktop only */}
         {!isMobile && (
@@ -1105,7 +1265,7 @@ export default function NotesPanel({
           maxHeight: isMobile ? '154px' : 'none',
           borderRight: isMobile ? 'none' : '0.5px solid var(--color-border-tertiary)',
           borderBottom: isMobile ? '0.5px solid var(--color-border-tertiary)' : 'none',
-          display: 'flex', flexDirection: 'column', background: 'var(--color-background-secondary)',
+          display: isMobile && mobileFocusMode ? 'none' : 'flex', flexDirection: 'column', background: 'var(--color-background-secondary)',
           overflow: 'hidden', flexShrink: 0,
           transition: 'width 0.2s'
         }}>
@@ -1186,10 +1346,15 @@ export default function NotesPanel({
                 <i className="ti ti-keyboard" />
                 <span style={{ fontSize: '11px' }}>Shortcuts</span>
               </button>
-              <button onClick={save} disabled={saving || !currentId}
+              <button onClick={saveNote} disabled={saving || !currentId}
                 style={{ padding: '4px 12px', background: saving ? '#9FE1CB' : '#1D9E75', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '500', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <i className="ti ti-device-floppy" /> {saving ? 'Saving…' : 'Save'}
               </button>
+              {currentId && (
+                <span style={{ fontSize: '11px', color: dirty ? '#854F0B' : 'var(--color-text-tertiary)', marginLeft: '4px' }}>
+                  {saving ? 'Saving…' : dirty ? 'Unsaved changes' : lastSavedAt ? 'Saved' : 'Auto-save on'}
+                </span>
+              )}
               <button onClick={handleDelete} disabled={!currentId}
                 style={{ padding: '4px 8px', background: 'transparent', color: '#E24B4A', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>
                 <i className="ti ti-trash" />
@@ -1225,9 +1390,17 @@ export default function NotesPanel({
 
           {/* mobile top mini-bar */}
           {isMobile && (
-            <div style={{ padding: '8px 12px', borderBottom: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{
+              padding: mobileFocusMode ? 'calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px' : '8px 12px',
+              borderBottom: '0.5px solid var(--color-border-tertiary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'var(--color-background-primary)',
+              flexShrink: 0
+            }}>
               <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--color-text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {note?.title || 'No note selected'}
+                {saving ? 'Saving…' : dirty ? 'Unsaved changes' : (note?.title || 'No note selected')}
               </span>
               {currentId && note?.obsidian_synced && (
                 <button onClick={handlePullFromObsidian} disabled={obsidianSyncing}
@@ -1244,22 +1417,52 @@ export default function NotesPanel({
                 </button>
               )}
               {currentId && (
+                <button
+                  onClick={() => setMobileFocusMode(value => !value)}
+                  style={{
+                    background: mobileFocusMode ? '#E1F5EE' : 'transparent',
+                    color: '#085041',
+                    border: mobileFocusMode ? '0.5px solid #9FE1CB' : 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    padding: '6px 9px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  <i className={`ti ${mobileFocusMode ? 'ti-minimize' : 'ti-pencil'}`} style={{ fontSize: '14px' }} />
+                  {mobileFocusMode ? 'Done' : 'Write'}
+                </button>
+              )}
+              {currentId && !mobileFocusMode && (
                 <button onClick={() => setReadMode(true)}
                   style={{ background: 'transparent', color: '#1D9E75', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}>
                   <i className="ti ti-maximize" />
                 </button>
               )}
-              <button onClick={handleDelete} disabled={!currentId}
+              {!mobileFocusMode && <button onClick={handleDelete} disabled={!currentId}
                 style={{ background: 'transparent', color: '#E24B4A', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}>
                 <i className="ti ti-trash" />
-              </button>
+              </button>}
             </div>
           )}
 
           {/* content */}
           <div
             data-editor-area
-            style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 14px 88px' : '24px 32px' }}
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: isMobile
+                ? mobileFocusMode
+                  ? '18px 18px calc(env(safe-area-inset-bottom, 0px) + 96px)'
+                  : '16px 14px 88px'
+                : '24px 32px'
+            }}
             onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
             onDrop={handleEditorDrop}
             onPaste={handleEditorPaste}
@@ -1267,7 +1470,7 @@ export default function NotesPanel({
             {currentId ? (
               <>
                 {/* breadcrumb + meta toggle */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                {!(isMobile && mobileFocusMode) && <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
                   {breadcrumb.map((item, idx) => (
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <button onClick={() => onSelect(item.id)}
@@ -1283,23 +1486,26 @@ export default function NotesPanel({
                     <i className={`ti ${metaHidden ? 'ti-eye' : 'ti-eye-off'}`} style={{ fontSize: '13px' }} />
                     {metaHidden ? 'Show info' : 'Hide info'}
                   </button>
-                </div>
+                </div>}
 
                 {/* title */}
-                <input ref={titleRef} value={title} onChange={e => setTitle(e.target.value)} placeholder="Untitled note…"
-                  style={{ fontFamily: "'Lora', serif", fontSize: isMobile ? '22px' : '26px', fontWeight: '500', color: 'var(--color-text-primary)', border: 'none', outline: 'none', background: 'transparent', width: '100%', marginBottom: '10px', lineHeight: 1.3 }} />
+                <input ref={titleRef} value={title} onFocus={() => setActiveBlockIdx(null)} onChange={e => { setTitle(e.target.value); setDirty(true) }} placeholder="Untitled note…"
+                  style={{ fontFamily: "'Lora', serif", fontSize: isMobile ? (mobileFocusMode ? '24px' : '22px') : '26px', fontWeight: '500', color: 'var(--color-text-primary)', border: 'none', outline: 'none', background: 'transparent', width: '100%', marginBottom: mobileFocusMode ? '16px' : '10px', lineHeight: 1.3 }} />
+                <div style={{ margin: mobileFocusMode ? '0 0 14px' : '0 0 16px' }}>
+                  <EmojiChips onPick={insertEmoji} compact={isMobile} />
+                </div>
 
                 {/* tags */}
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
+                {!(isMobile && mobileFocusMode) && <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '18px' }}>
                   {Object.entries(TAG_STYLES).map(([tag, s]) => (
                     <span key={tag} onClick={() => toggleTag(tag)}
                       style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '500', cursor: 'pointer', background: tags.includes(tag) ? s.bg : 'var(--color-background-secondary)', color: tags.includes(tag) ? s.color : 'var(--color-text-tertiary)', border: `0.5px solid ${tags.includes(tag) ? s.color + '44' : 'var(--color-border-tertiary)'}` }}>
                       {s.label}
                     </span>
                   ))}
-                </div>
+                </div>}
 
-                {!metaHidden && <>{/* subpage controls */}
+                {!metaHidden && !(isMobile && mobileFocusMode) && <>{/* subpage controls */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap' }}>
                   <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
                     {note?.parent_id ? 'Subpage in nested notes' : 'Top-level page'}
@@ -1315,7 +1521,7 @@ export default function NotesPanel({
                   {!isMobile ? (
                     <>
                       <div style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Parent page</div>
-                      <select value={parentId} onChange={e => setParentId(e.target.value)}
+                      <select value={parentId} onChange={e => { setParentId(e.target.value); setDirty(true) }}
                         style={{ width: '100%', padding: '9px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: '10px', fontSize: '12px', fontFamily: 'inherit', background: 'var(--color-background-primary)', color: 'var(--color-text-primary)', outline: 'none' }}>
                         <option value="">Top-level page</option>
                         {parentOptions.map(n => <option key={n.id} value={n.id}>{`${'— '.repeat(n.depth)}${n.title || 'Untitled note'}`}</option>)}
@@ -1364,29 +1570,70 @@ export default function NotesPanel({
                       )}
                     </span>
                     <div style={{ flex: 1 }} />
+                    <button onClick={handleToggleAutoSync}
+                      style={{ padding: '3px 8px', border: '0.5px solid #1D9E7540', borderRadius: '6px', background: note?.obsidian_auto_sync ? '#E1F5EE' : 'transparent', color: '#085041', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {note?.obsidian_auto_sync ? 'Auto-sync on' : 'Auto-sync off'}
+                    </button>
                     <button onClick={handleUnsyncObsidian}
                       style={{ padding: '3px 8px', border: '0.5px solid #1D9E7540', borderRadius: '6px', background: 'transparent', color: '#085041', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}>
                       Disconnect
                     </button>
                   </div>
-                ) : null}
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '10px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-secondary)', marginBottom: '14px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-secondary)' }}>
+                      Not connected to Obsidian yet.
+                    </span>
+                    <div style={{ flex: 1 }} />
+                    <button onClick={handleToggleAutoSync}
+                      style={{ padding: '3px 8px', border: '0.5px solid var(--color-border-secondary)', borderRadius: '6px', background: note?.obsidian_auto_sync ? '#E1F5EE' : 'transparent', color: note?.obsidian_auto_sync ? '#085041' : 'var(--color-text-secondary)', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {note?.obsidian_auto_sync ? 'Auto-sync on' : 'Auto-sync off'}
+                    </button>
+                  </div>
+                )}
 
                 {/* linked items */}
                 <LinkedItemsPanel sourceType="notes" sourceId={currentId} links={links} setLinks={setLinks} entities={entities} onNavigate={onNavigate} isMobile={true} />
                 </>}
                 <div style={{ marginTop: '16px' }}>
                   {blocks.length === 0 && (
-                    isMobile ? (
-                      <button onClick={() => addBlock('text')}
-                        style={{ width: '100%', padding: '28px 16px', border: '0.5px dashed var(--color-border-secondary)', borderRadius: '14px', background: 'transparent', color: 'var(--color-text-tertiary)', fontSize: '14px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', fontFamily: 'inherit' }}>
-                        <i className="ti ti-plus" style={{ fontSize: '26px' }} />
-                        แตะเพื่อเริ่มพิมพ์
-                      </button>
-                    ) : (
-                      <div style={{ padding: '20px 8px', color: 'var(--color-text-tertiary)', fontSize: '13px', fontStyle: 'italic' }}>
-                        Type / in any block to choose its type, or use the toolbar buttons above.
+                    <div style={{ padding: isMobile ? '14px 0 6px' : '18px 0 8px' }}>
+                      <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '10px' }}>
+                        Choose a starter or just begin with a blank paragraph.
                       </div>
-                    )
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, minmax(120px, 1fr))',
+                        gap: '8px',
+                        maxWidth: '720px'
+                      }}>
+                        {STARTER_TEMPLATES.map(template => (
+                          <button
+                            key={template.id}
+                            type="button"
+                            onClick={() => applyStarterTemplate(template)}
+                            style={{
+                              padding: '12px 10px',
+                              borderRadius: '10px',
+                              border: '0.5px solid var(--color-border-secondary)',
+                              background: 'var(--color-background-secondary)',
+                              color: 'var(--color-text-primary)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              fontFamily: 'inherit',
+                              textAlign: 'left'
+                            }}
+                          >
+                            <i className={`ti ${template.icon}`} style={{ fontSize: '15px', color: '#1D9E75', flexShrink: 0 }} />
+                            <span>{template.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {blocks.map((b, i) => (
                     <RichBlock
@@ -1404,6 +1651,7 @@ export default function NotesPanel({
                       isDropTarget={blockDropTarget?.idx === i}
                       dropPosition={blockDropTarget?.idx === i ? blockDropTarget.position : null}
                       triggerLinkRef={triggerLinkRef}
+                      onFocus={setActiveBlockIdx}
                     />
                   ))}
                 </div>
