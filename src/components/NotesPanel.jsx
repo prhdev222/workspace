@@ -89,6 +89,7 @@ const STARTER_TEMPLATES = [
 ]
 
 const DRAW_COLORS = ['#173B33', '#1D9E75', '#185FA5', '#E24B4A', '#854F0B', '#111827']
+const IMAGE_TRIM_PADDING = 24
 
 // ─── tree / sort helpers ─────────────────────────────────────────────────────
 
@@ -243,6 +244,72 @@ function parseImageContent(content) {
 function serializeImageContent(src, width) {
   const normalizedWidth = clampImageWidth(width)
   return normalizedWidth === 100 ? src : JSON.stringify({ src, width: normalizedWidth })
+}
+
+function trimCanvasToContent(sourceCanvas, padding = IMAGE_TRIM_PADDING) {
+  const ctx = sourceCanvas.getContext('2d')
+  const { width, height } = sourceCanvas
+  const pixels = ctx.getImageData(0, 0, width, height)
+  let minX = width
+  let minY = height
+  let maxX = -1
+  let maxY = -1
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4
+      const r = pixels.data[i]
+      const g = pixels.data[i + 1]
+      const b = pixels.data[i + 2]
+      const a = pixels.data[i + 3]
+      const isInk = a > 8 && (r < 245 || g < 245 || b < 245)
+      if (!isInk) continue
+      minX = Math.min(minX, x)
+      minY = Math.min(minY, y)
+      maxX = Math.max(maxX, x)
+      maxY = Math.max(maxY, y)
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return sourceCanvas
+
+  minX = Math.max(0, minX - padding)
+  minY = Math.max(0, minY - padding)
+  maxX = Math.min(width - 1, maxX + padding)
+  maxY = Math.min(height - 1, maxY + padding)
+
+  const trimmed = document.createElement('canvas')
+  trimmed.width = maxX - minX + 1
+  trimmed.height = maxY - minY + 1
+  const trimmedCtx = trimmed.getContext('2d')
+  trimmedCtx.fillStyle = '#FFFFFF'
+  trimmedCtx.fillRect(0, 0, trimmed.width, trimmed.height)
+  trimmedCtx.drawImage(sourceCanvas, minX, minY, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height)
+  return trimmed
+}
+
+function imageFromSrc(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = reject
+    image.src = src
+  })
+}
+
+async function trimImageDataUrl(src) {
+  if (!src?.startsWith('data:image/')) return src
+  const image = await imageFromSrc(src)
+  const canvas = document.createElement('canvas')
+  canvas.width = image.naturalWidth || image.width
+  canvas.height = image.naturalHeight || image.height
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.drawImage(image, 0, 0)
+  const trimmed = trimCanvasToContent(canvas)
+  if (trimmed.width === canvas.width && trimmed.height === canvas.height) return src
+  return trimmed.toDataURL('image/png')
 }
 
 // ─── FloatingToolbar (desktop) ───────────────────────────────────────────────
@@ -670,7 +737,8 @@ function DrawingPad({ isMobile, focusMode = false, noteTags = [], onInsert, onCa
   function insertDrawing() {
     const canvas = canvasRef.current
     if (!canvas) return
-    onInsert(canvas.toDataURL('image/png'), label.trim())
+    const trimmed = trimCanvasToContent(canvas)
+    onInsert(trimmed.toDataURL('image/png'), label.trim())
   }
 
   return (
@@ -1231,6 +1299,27 @@ export default function NotesPanel({
     setDirty(true)
   }
 
+  async function compactImageBlocksForSave(sourceBlocks) {
+    let changed = false
+    const compacted = []
+    for (const block of sourceBlocks) {
+      if (block.type !== 'image') {
+        compacted.push(block)
+        continue
+      }
+
+      const image = parseImageContent(block.text)
+      try {
+        const trimmedSrc = await trimImageDataUrl(image.src)
+        if (trimmedSrc !== image.src) changed = true
+        compacted.push({ ...block, text: serializeImageContent(trimmedSrc, image.width) })
+      } catch {
+        compacted.push(block)
+      }
+    }
+    return { blocks: compacted, changed }
+  }
+
   // ── block drag-reorder (desktop only) ─────────────────────────────────────
 
   function handleBlockDragStart(idx) { setDraggedBlockIdx(idx) }
@@ -1365,11 +1454,14 @@ export default function NotesPanel({
     setSaving(true)
     try {
       const resolvedParentId = parentId || null
-      const savedBlocks = blocks.map((b, i) => ({ id: b.id || crypto.randomUUID(), type: b.type, content: b.text, done: b.done, position: i }))
+      const compacted = await compactImageBlocksForSave(blocks)
+      const blocksToSave = compacted.blocks
+      const savedBlocks = blocksToSave.map((b, i) => ({ id: b.id || crypto.randomUUID(), type: b.type, content: b.text, done: b.done, position: i }))
       await updateNote(currentId, {
         title: title || 'Untitled', tags, parent_id: resolvedParentId,
         blocks: savedBlocks
       })
+      if (compacted.changed) setBlocks(blocksToSave)
       onSaved(currentId, { title: title || 'Untitled', tags, parent_id: resolvedParentId, blocks: savedBlocks, updated_at: Date.now() })
       setDirty(false)
       setLastSavedAt(new Date())
