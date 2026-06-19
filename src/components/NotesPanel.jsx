@@ -1001,6 +1001,7 @@ export default function NotesPanel({
   const [metaHidden, setMetaHidden] = useState(false)
   const [activeBlockIdx, setActiveBlockIdx] = useState(null)
   const [drawingOpen, setDrawingOpen] = useState(false)
+  const [focusToolsHidden, setFocusToolsHidden] = useState(false)
   const triggerLinkRef = useRef(null)
   const titleRef = useRef()
   const imageInputRef = useRef()
@@ -1028,10 +1029,15 @@ export default function NotesPanel({
       setParentId(note.parent_id || ''); setMobileMoveTargetId(note.parent_id || '')
       setDirty(false); setLastSavedAt(null)
       setDrawingOpen(false)
-    } else { setTitle(''); setTags([]); setBlocks([]); setParentId(''); setMobileMoveTargetId(''); setDirty(false); setLastSavedAt(null); setDrawingOpen(false) }
+      setFocusToolsHidden(false)
+    } else { setTitle(''); setTags([]); setBlocks([]); setParentId(''); setMobileMoveTargetId(''); setDirty(false); setLastSavedAt(null); setDrawingOpen(false); setFocusToolsHidden(false) }
   }, [currentId, note])
 
   useEffect(() => { setSearch(externalSearch) }, [externalSearch])
+
+  useEffect(() => {
+    if (!mobileFocusMode) setFocusToolsHidden(false)
+  }, [mobileFocusMode])
 
   useEffect(() => {
     if (!isMobile || !visibleNotes.length) return
@@ -1671,8 +1677,8 @@ export default function NotesPanel({
                     fontFamily: 'inherit'
                   }}
                 >
-                  <i className={`ti ${mobileFocusMode ? 'ti-minimize' : 'ti-pencil'}`} style={{ fontSize: '14px' }} />
-                  {mobileFocusMode ? 'Done' : 'Write'}
+                  <i className={`ti ${mobileFocusMode ? 'ti-minimize' : 'ti-maximize'}`} style={{ fontSize: '14px' }} />
+                  {mobileFocusMode ? 'Done' : 'Full'}
                 </button>
               )}
               {currentId && !mobileFocusMode && (
@@ -1685,6 +1691,87 @@ export default function NotesPanel({
                 style={{ background: 'transparent', color: '#E24B4A', border: 'none', cursor: 'pointer', fontSize: '16px', padding: '4px' }}>
                 <i className="ti ti-trash" />
               </button>}
+            </div>
+          )}
+
+          {isMobile && mobileFocusMode && currentId && (
+            <div style={{
+              position: 'fixed',
+              left: '12px',
+              right: '12px',
+              bottom: 'calc(env(safe-area-inset-bottom, 0px) + 70px)',
+              zIndex: 9984,
+              display: 'flex',
+              justifyContent: focusToolsHidden ? 'flex-end' : 'center',
+              pointerEvents: 'none'
+            }}>
+              {focusToolsHidden ? (
+                <button
+                  type="button"
+                  onClick={() => setFocusToolsHidden(false)}
+                  style={{
+                    pointerEvents: 'auto',
+                    padding: '10px 13px',
+                    borderRadius: '999px',
+                    border: '0.5px solid #1D9E7540',
+                    background: '#085041',
+                    color: '#F7FFFB',
+                    boxShadow: '0 10px 26px rgba(8,80,65,0.22)',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <i className="ti ti-tools" /> Tools
+                </button>
+              ) : (
+                <div style={{
+                  pointerEvents: 'auto',
+                  width: '100%',
+                  maxWidth: '520px',
+                  display: 'grid',
+                  gap: '8px',
+                  padding: '10px',
+                  borderRadius: '18px',
+                  border: '0.5px solid #CBE9DD',
+                  background: '#FBFFFD',
+                  boxShadow: '0 18px 42px rgba(15,55,45,0.20)'
+                }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', paddingBottom: '1px' }}>
+                    <button onClick={() => imageInputRef.current?.click()}
+                      style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+                      <i className="ti ti-photo-plus" /> Picture
+                    </button>
+                    <button onClick={() => setDrawingOpen(true)}
+                      style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid #1D9E7540', background: drawingOpen ? '#E1F5EE' : 'var(--color-background-secondary)', color: '#085041', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
+                      <i className="ti ti-pencil" /> Draw
+                    </button>
+                    <button onClick={handleCreateSubpage}
+                      style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+                      <i className="ti ti-indent-increase" /> Subpage
+                    </button>
+                    <button type="button" onClick={() => setFocusToolsHidden(true)}
+                      style={{ flex: '0 0 auto', marginLeft: 'auto', padding: '8px 10px', borderRadius: '10px', border: 'none', background: 'transparent', color: 'var(--color-text-tertiary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <i className="ti ti-eye-off" /> Hide
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', paddingBottom: '1px' }}>
+                    {Object.entries(TAG_STYLES).map(([tag, s]) => (
+                      <button key={tag} onClick={() => toggleTag(tag)}
+                        style={{ flex: '0 0 auto', padding: '6px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', background: tags.includes(tag) ? s.bg : 'var(--color-background-secondary)', color: tags.includes(tag) ? s.color : 'var(--color-text-tertiary)', border: `0.5px solid ${tags.includes(tag) ? s.color + '44' : 'var(--color-border-secondary)'}`, fontFamily: 'inherit' }}>
+                        {s.label}
+                      </button>
+                    ))}
+                    <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center' }}>
+                      <EmojiChips emojis={QUICK_EMOJIS.slice(0, 6)} onPick={insertEmoji} compact />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1730,43 +1817,6 @@ export default function NotesPanel({
                   style={{ fontFamily: "'Lora', serif", fontSize: isMobile ? (mobileFocusMode ? '24px' : '22px') : '26px', fontWeight: '500', color: 'var(--color-text-primary)', border: 'none', outline: 'none', background: 'transparent', width: '100%', marginBottom: mobileFocusMode ? '14px' : '12px', lineHeight: 1.3 }} />
 
                 <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} />
-
-                {isMobile && mobileFocusMode && (
-                  <div style={{
-                    display: 'grid',
-                    gap: '10px',
-                    padding: '10px 0 12px',
-                    marginBottom: '14px',
-                    borderTop: '0.5px solid var(--color-border-tertiary)',
-                    borderBottom: '0.5px solid var(--color-border-tertiary)'
-                  }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', paddingBottom: '2px' }}>
-                      <button onClick={() => imageInputRef.current?.click()}
-                        style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
-                        <i className="ti ti-photo-plus" /> Picture
-                      </button>
-                      <button onClick={() => setDrawingOpen(true)}
-                        style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid #1D9E7540', background: drawingOpen ? '#E1F5EE' : 'var(--color-background-secondary)', color: '#085041', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700' }}>
-                        <i className="ti ti-pencil" /> Draw
-                      </button>
-                      <button onClick={handleCreateSubpage}
-                        style={{ flex: '0 0 auto', padding: '8px 11px', borderRadius: '10px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
-                        <i className="ti ti-indent-increase" /> Subpage
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', overflowX: 'auto', paddingBottom: '2px' }}>
-                      {Object.entries(TAG_STYLES).map(([tag, s]) => (
-                        <button key={tag} onClick={() => toggleTag(tag)}
-                          style={{ flex: '0 0 auto', padding: '6px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '600', cursor: 'pointer', background: tags.includes(tag) ? s.bg : 'var(--color-background-secondary)', color: tags.includes(tag) ? s.color : 'var(--color-text-tertiary)', border: `0.5px solid ${tags.includes(tag) ? s.color + '44' : 'var(--color-border-secondary)'}`, fontFamily: 'inherit' }}>
-                          {s.label}
-                        </button>
-                      ))}
-                      <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center' }}>
-                        <EmojiChips emojis={QUICK_EMOJIS.slice(0, 6)} onPick={insertEmoji} compact />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {!(isMobile && mobileFocusMode) && (
                   <div style={{
