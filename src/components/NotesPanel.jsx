@@ -221,6 +221,30 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;')
 }
 
+function clampImageWidth(value) {
+  const width = Number(value)
+  if (!Number.isFinite(width)) return 100
+  return Math.min(100, Math.max(25, Math.round(width)))
+}
+
+function parseImageContent(content) {
+  const raw = content || ''
+  if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed?.src) return { src: parsed.src, width: clampImageWidth(parsed.width) }
+    } catch {
+      // Older image blocks are plain data URLs. Fall through and render as-is.
+    }
+  }
+  return { src: raw, width: 100 }
+}
+
+function serializeImageContent(src, width) {
+  const normalizedWidth = clampImageWidth(width)
+  return normalizedWidth === 100 ? src : JSON.stringify({ src, width: normalizedWidth })
+}
+
 // ─── FloatingToolbar (desktop) ───────────────────────────────────────────────
 
 function FloatingToolbar({ onTriggerLink }) {
@@ -765,6 +789,7 @@ function DrawingPad({ isMobile, focusMode = false, noteTags = [], onInsert, onCa
 function RichBlock({
   block, index, isMobile,
   onTextChange, onToggleDone, onDelete, onTypeChange, onAddBelow,
+  onImageWidthChange, onMoveBlock, canMoveUp, canMoveDown,
   onDragStart, onDragOver, onDrop,
   isDragging, isDropTarget, dropPosition,
   triggerLinkRef,
@@ -872,6 +897,7 @@ function RichBlock({
     borderBottom: dropPosition === 'after' ? '2px solid #1D9E75' : undefined,
     boxShadow: dropPosition === 'inside' ? 'inset 0 0 0 1.5px #1D9E75' : undefined,
   } : {}
+  const imageContent = block.type === 'image' ? parseImageContent(block.text) : null
 
   return (
     <>
@@ -922,14 +948,54 @@ function RichBlock({
 
         {/* image block */}
         {block.type === 'image' ? (
-          block.text ? (
-            <div style={{ flex: 1, position: 'relative' }}>
-              <img
-                src={block.text}
-                alt=""
-                style={{ maxWidth: '100%', borderRadius: '10px', display: 'block', cursor: 'pointer' }}
-                onClick={() => window.open(block.text, '_blank')}
-              />
+          imageContent?.src ? (
+            <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+              <div style={{ width: `${imageContent.width}%`, maxWidth: '100%', transition: 'width 0.16s ease-out' }}>
+                <img
+                  src={imageContent.src}
+                  alt=""
+                  style={{ width: '100%', maxWidth: '100%', borderRadius: '10px', display: 'block', cursor: 'pointer' }}
+                  onClick={() => window.open(imageContent.src, '_blank')}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px', padding: '7px 8px', borderRadius: '10px', background: 'var(--color-background-secondary)', border: '0.5px solid var(--color-border-tertiary)' }}>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-secondary)' }}>Size</span>
+                <input
+                  type="range"
+                  min="25"
+                  max="100"
+                  value={imageContent.width}
+                  onChange={e => onImageWidthChange(index, Number(e.target.value))}
+                  style={{ flex: '1 1 120px', minWidth: '90px' }}
+                />
+                {[50, 75, 100].map(width => (
+                  <button
+                    key={width}
+                    type="button"
+                    onClick={() => onImageWidthChange(index, width)}
+                    style={{ padding: '4px 7px', borderRadius: '7px', border: '0.5px solid var(--color-border-secondary)', background: imageContent.width === width ? '#E1F5EE' : 'var(--color-background-primary)', color: imageContent.width === width ? '#085041' : 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit' }}
+                  >
+                    {width}%
+                  </button>
+                ))}
+                <div style={{ width: '1px', height: '20px', background: 'var(--color-border-tertiary)' }} />
+                <button
+                  type="button"
+                  onClick={() => onMoveBlock(index, -1)}
+                  disabled={!canMoveUp}
+                  style={{ padding: '4px 7px', borderRadius: '7px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', color: canMoveUp ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)', cursor: canMoveUp ? 'pointer' : 'not-allowed', fontSize: '11px', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <i className="ti ti-arrow-up" /> Up
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMoveBlock(index, 1)}
+                  disabled={!canMoveDown}
+                  style={{ padding: '4px 7px', borderRadius: '7px', border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)', color: canMoveDown ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)', cursor: canMoveDown ? 'pointer' : 'not-allowed', fontSize: '11px', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <i className="ti ti-arrow-down" /> Down
+                </button>
+              </div>
             </div>
           ) : (
             <div style={{ flex: 1, padding: '28px', border: '1.5px dashed var(--color-border-secondary)', borderRadius: '10px', textAlign: 'center', color: 'var(--color-text-tertiary)', fontSize: '13px' }}>
@@ -1140,6 +1206,28 @@ export default function NotesPanel({
 
   function deleteBlock(idx) {
     setBlocks(prev => prev.filter((_, i) => i !== idx))
+    setDirty(true)
+  }
+
+  function moveBlock(idx, direction) {
+    setBlocks(prev => {
+      const target = idx + direction
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      const current = next[idx]
+      next[idx] = next[target]
+      next[target] = current
+      return next
+    })
+    setDirty(true)
+  }
+
+  function updateImageBlockWidth(idx, width) {
+    setBlocks(prev => prev.map((block, index) => {
+      if (index !== idx || block.type !== 'image') return block
+      const image = parseImageContent(block.text)
+      return { ...block, text: serializeImageContent(image.src, width) }
+    }))
     setDirty(true)
   }
 
@@ -1963,6 +2051,10 @@ export default function NotesPanel({
                       onDelete={deleteBlock}
                       onTypeChange={changeBlockType}
                       onAddBelow={addBlockBelow}
+                      onImageWidthChange={updateImageBlockWidth}
+                      onMoveBlock={moveBlock}
+                      canMoveUp={i > 0}
+                      canMoveDown={i < blocks.length - 1}
                       onDragStart={handleBlockDragStart}
                       onDragOver={handleBlockDragOver}
                       onDrop={handleBlockDrop}
@@ -2024,11 +2116,20 @@ export default function NotesPanel({
 
           <div>
             {blocks.map((block, i) => {
-              if (block.type === 'image') return (
-                <div key={block.id || i} style={{ marginBottom: '12px' }}>
-                  {block.text && <img src={block.text} alt="" style={{ maxWidth: '100%', borderRadius: '10px' }} />}
-                </div>
-              )
+              if (block.type === 'image') {
+                const image = parseImageContent(block.text)
+                return (
+                  <div key={block.id || i} style={{ marginBottom: '12px' }}>
+                    {image.src && (
+                      <img
+                        src={image.src}
+                        alt=""
+                        style={{ width: `${image.width}%`, maxWidth: '100%', borderRadius: '10px' }}
+                      />
+                    )}
+                  </div>
+                )
+              }
               return (
                 <div key={block.id || i} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '8px' }}>
                   {block.type === 'bullet' && <span style={{ color: '#1D9E75', flexShrink: 0, fontSize: '16px', lineHeight: '26px' }}>•</span>}

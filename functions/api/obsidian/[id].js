@@ -37,6 +37,25 @@ function stripHtml(html) {
     .trim()
 }
 
+function clampImageWidth(value) {
+  const width = Number(value)
+  if (!Number.isFinite(width)) return 100
+  return Math.min(100, Math.max(25, Math.round(width)))
+}
+
+function parseImageContent(content) {
+  const raw = content || ''
+  if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (parsed?.src) return { src: parsed.src, width: clampImageWidth(parsed.width) }
+    } catch {
+      // Existing image blocks are plain data URLs.
+    }
+  }
+  return { src: raw, width: 100 }
+}
+
 function slugify(title) {
   return (title || 'untitled')
     .toLowerCase()
@@ -67,6 +86,12 @@ function noteToMarkdown(note) {
       case 'todo':    return `- [${b.done ? 'x' : ' '}] ${text}`
       case 'quote':   return `> ${text}`
       case 'bullet':  return `- ${text}`
+      case 'image': {
+        const image = parseImageContent(b.content || b.text || '')
+        if (!image.src) return ''
+        if (image.width === 100) return `![image](${image.src})`
+        return `<img src="${image.src}" alt="image" style="width:${image.width}%;">`
+      }
       default:        return text
     }
   })
