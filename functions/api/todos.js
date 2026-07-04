@@ -35,10 +35,11 @@ export async function onRequestPost({ request, env }) {
     const endTime = body.end_time || null
     const location = body.location || ''
     const attachmentUrl = body.attachment_url || ''
+    const color = body.color || (itemType === 'appointment' ? 'teal' : '')
 
     await db.execute(
-      'INSERT INTO todos (id, text, done, item_type, priority, start_date, due_date, start_time, end_time, location, attachment_url, due_label, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, body.text, 0, itemType, body.priority || 'med', startDate, dueDate, startTime, endTime, location, attachmentUrl, dueLabel, body.section || 'today', now]
+      'INSERT INTO todos (id, text, done, item_type, priority, start_date, due_date, start_time, end_time, location, attachment_url, color, due_label, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, body.text, 0, itemType, body.priority || 'med', startDate, dueDate, startTime, endTime, location, attachmentUrl, color, dueLabel, body.section || 'today', now]
     )
 
     return json({
@@ -53,6 +54,7 @@ export async function onRequestPost({ request, env }) {
       end_time: endTime,
       location,
       attachment_url: attachmentUrl,
+      color,
       due_label: dueLabel,
       section: body.section || 'today',
       created_at: now

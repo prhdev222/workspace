@@ -97,7 +97,8 @@ APP_PASSWORD=your-login-password-here
 
 Run locally:
 ```bash
-npx wrangler pages dev --compatibility-date=2024-01-01 -- npm run dev
+npm run build
+npm run dev:pages
 ```
 
 ### 4. Create DB tables (one-time)
@@ -177,7 +178,7 @@ if (t.includes('cml') || t.includes('leukemia')) return PRESETS.cml
 - All `/api/*` routes are protected by session cookie check in `_middleware.js`
 - Only `/api/auth/login` is public
 - Turso credentials never touch the frontend — only Cloudflare Functions
-- Session cookie is `HttpOnly` + `SameSite=Strict` (no JS access, no CSRF)
+- Session cookie is `HttpOnly` + `Secure` + `SameSite=Strict`, and is remembered for 30 days
 - Rotate `SESSION_SECRET` in CF dashboard to instantly invalidate all sessions
 - For extra security: enable **Cloudflare Access** (Zero Trust) on your Pages domain
 

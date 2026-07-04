@@ -41,6 +41,7 @@ export async function onRequestGet({ env }) {
         end_time TEXT,
         location TEXT NOT NULL DEFAULT '',
         attachment_url TEXT NOT NULL DEFAULT '',
+        color TEXT NOT NULL DEFAULT 'teal',
         due_label TEXT NOT NULL DEFAULT 'today',
         section TEXT NOT NULL DEFAULT 'today',
         created_at INTEGER NOT NULL
@@ -169,6 +170,10 @@ export async function onRequestGet({ env }) {
 
     if (!todoColumnNames.has('attachment_url')) {
       await db.execute("ALTER TABLE todos ADD COLUMN attachment_url TEXT NOT NULL DEFAULT ''")
+    }
+
+    if (!todoColumnNames.has('color')) {
+      await db.execute("ALTER TABLE todos ADD COLUMN color TEXT NOT NULL DEFAULT 'teal'")
     }
 
     const { rows: ideaColumns } = await db.execute('PRAGMA table_info(ideas)')

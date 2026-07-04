@@ -30,6 +30,7 @@ export async function onRequestPut({ params, request, env }) {
     if ('end_time' in body) { fields.push('end_time = ?'); values.push(body.end_time || null) }
     if ('location' in body) { fields.push('location = ?'); values.push(body.location || '') }
     if ('attachment_url' in body) { fields.push('attachment_url = ?'); values.push(body.attachment_url || '') }
+    if ('color' in body) { fields.push('color = ?'); values.push(body.color || 'teal') }
     if ('section' in body) { fields.push('section = ?'); values.push(body.section) }
 
     if (!fields.length) return json({ error: 'No fields to update' }, 400)

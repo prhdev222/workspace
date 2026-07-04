@@ -46,9 +46,42 @@ const TOOLS = [
         start_date: { type: 'string', description: 'วันที่ รูปแบบ YYYY-MM-DD' },
         start_time: { type: 'string', description: 'เวลาเริ่ม รูปแบบ HH:MM' },
         end_time: { type: 'string', description: 'เวลาสิ้นสุด รูปแบบ HH:MM (optional)' },
-        location: { type: 'string', description: 'สถานที่ (optional)' }
+        location: { type: 'string', description: 'สถานที่ (optional)' },
+        color: { type: 'string', enum: ['teal', 'blue', 'purple', 'orange', 'pink', 'red', 'green'], description: 'สีพื้นหลังในปฏิทิน (default: teal)' }
       },
       required: ['text', 'start_date']
+    }
+  },
+  {
+    name: 'update_appointment',
+    description: 'แก้ไขนัดหมาย เช่น เปลี่ยนเวลา สถานที่ หรือสีพื้นหลังในปฏิทิน',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        match_text: { type: 'string', description: 'ข้อความในชื่อนัดที่ใช้ค้นหา' },
+        match_date: { type: 'string', description: 'วันที่นัดเดิม YYYY-MM-DD (optional)' },
+        match_start_time: { type: 'string', description: 'เวลาเริ่มเดิม HH:MM (optional)' },
+        text: { type: 'string', description: 'ชื่อใหม่ (optional)' },
+        start_date: { type: 'string', description: 'วันที่ใหม่ YYYY-MM-DD (optional)' },
+        start_time: { type: 'string', description: 'เวลาเริ่มใหม่ HH:MM (optional)' },
+        end_time: { type: 'string', description: 'เวลาสิ้นสุดใหม่ HH:MM (optional)' },
+        location: { type: 'string', description: 'สถานที่ใหม่ (optional)' },
+        color: { type: 'string', enum: ['teal', 'blue', 'purple', 'orange', 'pink', 'red', 'green'], description: 'สีพื้นหลังใหม่ (optional)' }
+      },
+      required: ['match_text']
+    }
+  },
+  {
+    name: 'delete_appointment',
+    description: 'ลบนัดหมายออกจากปฏิทิน',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        match_text: { type: 'string', description: 'ข้อความในชื่อนัดที่ใช้ค้นหา' },
+        match_date: { type: 'string', description: 'วันที่นัด YYYY-MM-DD (optional)' },
+        match_start_time: { type: 'string', description: 'เวลาเริ่ม HH:MM (optional)' }
+      },
+      required: ['match_text']
     }
   },
   {
@@ -85,6 +118,34 @@ const TOOLS = [
   }
 ]
 
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function appointmentDate(row) {
+  return row.start_date || row.due_date || (/^\d{4}-\d{2}-\d{2}$/.test(row.due_label || '') ? row.due_label : null)
+}
+
+function describeAppointment(item) {
+  const date = appointmentDate(item) || 'no date'
+  const time = item.start_time ? ` ${item.start_time}` : ''
+  return `"${item.text}" ${date}${time}`
+}
+
+async function singleAppointmentMatch(input) {
+  const todos = await callApi('GET', '/api/todos')
+  let matches = todos.filter(t => !t.done && t.item_type === 'appointment')
+  const matchText = normalizeText(input.match_text)
+  if (matchText) matches = matches.filter(row => normalizeText(row.text).includes(matchText))
+  if (input.match_date) matches = matches.filter(row => appointmentDate(row) === input.match_date)
+  if (input.match_start_time) matches = matches.filter(row => row.start_time === input.match_start_time)
+  if (matches.length === 0) throw new Error('ไม่พบนัดที่ตรงกับคำขอ')
+  if (matches.length > 1) {
+    throw new Error(`เจอนัดมากกว่า 1 รายการ: ${matches.slice(0, 5).map(describeAppointment).join(', ')}`)
+  }
+  return matches[0]
+}
+
 async function handleTool(name, input) {
   if (name === 'add_appointment') {
     const item = await callApi('POST', '/api/todos', {
@@ -92,9 +153,35 @@ async function handleTool(name, input) {
       item_type: 'appointment',
       section: 'upcoming',
       due_date: input.start_date,
-      due_label: input.start_date
+      due_label: input.start_date,
+      color: input.color || 'teal'
     })
-    return `✅ บันทึกนัดหมาย "${input.text}" วันที่ ${input.start_date}${input.start_time ? ' เวลา ' + input.start_time : ''}${input.location ? ' ที่ ' + input.location : ''} แล้วค่ะ`
+    return `✅ บันทึกนัดหมาย "${input.text}" วันที่ ${input.start_date}${input.start_time ? ' เวลา ' + input.start_time : ''}${input.location ? ' ที่ ' + input.location : ''}${input.color ? ' สี ' + input.color : ''} แล้วค่ะ`
+  }
+
+  if (name === 'update_appointment') {
+    const appointment = await singleAppointmentMatch(input)
+    const updates = {}
+    if ('text' in input && input.text) updates.text = input.text
+    if ('start_time' in input) updates.start_time = input.start_time || null
+    if ('end_time' in input) updates.end_time = input.end_time || null
+    if ('location' in input) updates.location = input.location || ''
+    if ('color' in input && input.color) updates.color = input.color
+    if (input.start_date) {
+      updates.start_date = input.start_date
+      updates.due_date = input.start_date
+      updates.due_label = input.start_date
+      updates.section = 'upcoming'
+    }
+    if (Object.keys(updates).length === 0) throw new Error('ไม่มีข้อมูลใหม่ให้แก้ไข')
+    await callApi('PUT', `/api/todos/${appointment.id}`, updates)
+    return `✅ แก้ไขนัดหมาย ${describeAppointment(appointment)} แล้วค่ะ`
+  }
+
+  if (name === 'delete_appointment') {
+    const appointment = await singleAppointmentMatch(input)
+    await callApi('DELETE', `/api/todos/${appointment.id}`)
+    return `✅ ลบนัดหมาย ${describeAppointment(appointment)} แล้วค่ะ`
   }
 
   if (name === 'add_task') {

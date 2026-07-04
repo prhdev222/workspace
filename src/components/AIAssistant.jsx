@@ -5,6 +5,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 
 const EXAMPLES = [
   'นัดตรวจเลือด พรุ่งนี้ 10 โมง ที่ lab',
+  'เปลี่ยนสีนัดตรวจเลือดพรุ่งนี้เป็นสีม่วง',
+  'ลบนัดตรวจเลือดพรุ่งนี้',
   'note BCR-ABL monitoring: ตรวจ PCR ทุก 3 เดือน',
   'todo ส่ง case report ภายในวันศุกร์ priority สูง',
   'ประจำเดือนมาวันนี้',
@@ -153,6 +155,7 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
         role: 'assistant',
         type: data.type,
         summary: data.summary,
+        action: data.action,
         result: data.result,
         ts: Date.now()
       }])
@@ -163,7 +166,14 @@ export default function AIAssistant({ setNotes, setTodos, setView, onNoteCreated
         setView?.('notes')
         onNoteCreated?.(data.result)
       }
-      if ((data.type === 'todo' || data.type === 'appointment' || data.type === 'health') && data.result) {
+      if (data.action === 'deleted_appointment' && data.result) {
+        setTodos?.(prev => prev.filter(item => item.id !== data.result.id))
+        setView?.('todo')
+      } else if (data.action === 'updated_appointment' && data.result) {
+        setTodos?.(prev => prev.map(item => item.id === data.result.id ? { ...item, ...data.result } : item))
+        setView?.('todo')
+        onTodoCreated?.(data.result)
+      } else if ((data.type === 'todo' || data.type === 'appointment' || data.type === 'health') && data.result) {
         setTodos?.(prev => [data.result, ...prev])
         setView?.('todo')
         onTodoCreated?.(data.result)

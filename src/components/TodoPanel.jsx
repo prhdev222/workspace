@@ -16,6 +16,18 @@ const TYPE_STYLES = {
   health: { bg: '#FDEEF4', color: '#8B2252', label: 'Health', icon: 'ti-heart-rate-monitor' }
 }
 
+const COLOR_STYLES = {
+  teal: { bg: '#E1F5EE', soft: '#F0FBF7', strong: '#CFF0E4', color: '#085041', dot: '#1D9E75' },
+  blue: { bg: '#E6F1FB', soft: '#F5FAFE', strong: '#D3E8F8', color: '#185FA5', dot: '#3F8FD2' },
+  purple: { bg: '#EEEDFE', soft: '#F8F7FF', strong: '#DEDBFB', color: '#534AB7', dot: '#7F77DD' },
+  orange: { bg: '#FAEEDA', soft: '#FFF9EF', strong: '#F3E1BF', color: '#854F0B', dot: '#D39B3C' },
+  pink: { bg: '#FDEEF4', soft: '#FFF7FA', strong: '#F7D9E6', color: '#8B2252', dot: '#C0507A' },
+  red: { bg: '#FCEBEB', soft: '#FFF7F7', strong: '#F7D4D4', color: '#A32D2D', dot: '#E24B4A' },
+  green: { bg: '#E9F7DF', soft: '#F7FCF2', strong: '#D5EDC3', color: '#3B6D19', dot: '#6AA83F' }
+}
+
+const APPOINTMENT_COLORS = Object.keys(COLOR_STYLES)
+
 const HEALTH_QUICK_LOGS = [
   { emoji: '🩸', label: 'Period Start', note: '' },
   { emoji: '🔴', label: 'Period End', note: '' },
@@ -86,6 +98,22 @@ function isImageAttachment(value) {
   return /^data:image\//.test(value || '') || /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i.test(value || '')
 }
 
+function getTodoTypeStyle(todo) {
+  if (todo.item_type === 'appointment') {
+    const colorStyle = COLOR_STYLES[todo.color || 'teal'] || COLOR_STYLES.teal
+    return { ...TYPE_STYLES.appointment, bg: colorStyle.bg, color: colorStyle.color }
+  }
+  return TYPE_STYLES[todo.item_type] || TYPE_STYLES.task
+}
+
+function getDayAccent(day) {
+  const appointment = day.items.find(todo => todo.item_type === 'appointment')
+  if (appointment) return COLOR_STYLES[appointment.color || 'teal'] || COLOR_STYLES.teal
+  if (day.hasHealth) return COLOR_STYLES.pink
+  if (day.hasTask) return COLOR_STYLES.orange
+  return COLOR_STYLES.teal
+}
+
 export default function TodoPanel({ todos, setTodos, isMobile = false, externalSearch = '', selectedTodoId = null, setSelectedTodoId, links = [], setLinks, entities, onNavigate }) {
   const [agendaView, setAgendaView] = useState('today')
   const [agendaDate, setAgendaDate] = useState(toIsoDate())
@@ -100,6 +128,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
   const [newEndTime, setNewEndTime] = useState('10:00')
   const [newLocation, setNewLocation] = useState('')
   const [newAttachmentUrl, setNewAttachmentUrl] = useState('')
+  const [newColor, setNewColor] = useState('teal')
   const [search, setSearch] = useState(externalSearch)
   const attachmentInputRef = useRef()
 
@@ -162,6 +191,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
         start_time: newItemType === 'appointment' ? (newStartTime || null) : null,
         end_time: newItemType === 'appointment' ? (newEndTime || null) : null,
         location: newItemType === 'appointment' ? newLocation.trim() : '',
+        color: newItemType === 'appointment' ? newColor : '',
         due_label: newDueDate || 'today',
         attachment_url: newAttachmentUrl.trim(),
         section: newSection
@@ -181,6 +211,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
         priority: 'med',
         start_date: todayIso,
         due_date: todayIso,
+        color: 'pink',
         due_label: todayIso,
         section: 'today'
       })
@@ -255,7 +286,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
           <div style={{ flex: 1, height: '0.5px', background: 'var(--color-border-tertiary)' }} />
         </div>
         {items.map(t => {
-          const typeStyle = TYPE_STYLES[t.item_type] || TYPE_STYLES.task
+          const typeStyle = getTodoTypeStyle(t)
           return (
           <div key={t.id}>
           <div style={{
@@ -492,6 +523,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px' }}>
               {calendarDays.map(day => {
                 const isSelected = (agendaView === 'today' ? todayIso : agendaDate) === day.iso
+                const dayAccent = getDayAccent(day)
                 return (
                   <button
                     key={day.iso}
@@ -503,20 +535,18 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
                     style={{
                       minHeight: '46px',
                       borderRadius: '12px',
-                      border: isSelected ? '1px solid #1D9E75' : '0.5px solid var(--color-border-tertiary)',
+                      border: isSelected ? `1px solid ${dayAccent.dot}` : '0.5px solid var(--color-border-tertiary)',
                       background: isSelected
-                        ? 'linear-gradient(180deg, #E1F5EE 0%, #CFF0E4 100%)'
-                        : day.hasAppointment
-                          ? 'linear-gradient(180deg, #EEF8F4 0%, #E4F3ED 100%)'
-                          : day.hasTask
-                            ? 'linear-gradient(180deg, #F9F4E9 0%, #F3E9D5 100%)'
-                            : 'var(--color-background-secondary)',
+                        ? `linear-gradient(180deg, ${dayAccent.bg} 0%, ${dayAccent.strong} 100%)`
+                        : (day.hasAppointment || day.hasTask || day.hasHealth)
+                          ? dayAccent.soft
+                          : 'var(--color-background-secondary)',
                       color: day.inMonth ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
                       cursor: 'pointer',
                       position: 'relative',
                       padding: '6px 4px',
                       fontFamily: 'inherit',
-                      boxShadow: isSelected ? '0 10px 24px rgba(29, 158, 117, 0.16)' : 'none',
+                      boxShadow: isSelected ? `0 10px 24px ${dayAccent.dot}26` : 'none',
                       transform: isSelected ? 'translateY(-1px)' : 'none'
                     }}
                   >
@@ -532,7 +562,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
                         width: '7px',
                         height: '7px',
                         borderRadius: '50%',
-                        background: day.hasHealth ? '#C0507A' : day.hasAppointment ? '#1D9E75' : '#D39B3C'
+                        background: dayAccent.dot
                       }} />
                     )}
                   </button>
@@ -560,7 +590,7 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
             ) : (
               <div style={{ display: 'grid', gap: '10px' }}>
                 {agendaItems.map(item => {
-                  const typeStyle = TYPE_STYLES[item.item_type] || TYPE_STYLES.task
+                  const typeStyle = getTodoTypeStyle(item)
                   const isSelected = selectedAgendaItemId === item.id
                   return (
                     <button
@@ -787,21 +817,56 @@ export default function TodoPanel({ todos, setTodos, isMobile = false, externalS
             />
           </label>
           {newItemType === 'appointment' && (
-            <input
-              value={newLocation}
-              onChange={e => setNewLocation(e.target.value)}
-              placeholder="Location"
-              style={{
-                padding: '5px 8px',
-                fontSize: '12px',
-                borderRadius: '6px',
+            <>
+              <input
+                value={newLocation}
+                onChange={e => setNewLocation(e.target.value)}
+                placeholder="Location"
+                style={{
+                  padding: '5px 8px',
+                  fontSize: '12px',
+                  borderRadius: '6px',
+                  border: '0.5px solid var(--color-border-secondary)',
+                  background: 'var(--color-background-primary)',
+                  color: 'var(--color-text-primary)',
+                  fontFamily: 'inherit',
+                  minWidth: isMobile ? '100%' : '160px'
+                }}
+              />
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 6px',
+                borderRadius: '8px',
                 border: '0.5px solid var(--color-border-secondary)',
-                background: 'var(--color-background-primary)',
-                color: 'var(--color-text-primary)',
-                fontFamily: 'inherit',
-                minWidth: isMobile ? '100%' : '160px'
-              }}
-            />
+                background: 'var(--color-background-primary)'
+              }}>
+                {APPOINTMENT_COLORS.map(color => {
+                  const swatch = COLOR_STYLES[color]
+                  const active = newColor === color
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      title={`Appointment color: ${color}`}
+                      aria-label={`Appointment color ${color}`}
+                      onClick={() => setNewColor(color)}
+                      style={{
+                        width: '18px',
+                        height: '18px',
+                        borderRadius: '50%',
+                        border: active ? `2px solid ${swatch.color}` : '1px solid var(--color-border-tertiary)',
+                        background: swatch.dot,
+                        boxShadow: active ? `0 0 0 2px ${swatch.bg}` : 'none',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                    />
+                  )
+                })}
+              </div>
+            </>
           )}
           <input
             value={newAttachmentUrl}

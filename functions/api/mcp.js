@@ -38,9 +38,42 @@ const TOOLS = [
         start_time:     { type: 'string', description: 'เวลาเริ่ม รูปแบบ HH:MM (optional)' },
         end_time:       { type: 'string', description: 'เวลาสิ้นสุด รูปแบบ HH:MM (optional)' },
         location:       { type: 'string', description: 'สถานที่ (optional)' },
-        attachment_url: { type: 'string', description: 'URL ของไฟล์แนบ จาก upload_file (optional)' }
+        attachment_url: { type: 'string', description: 'URL ของไฟล์แนบ จาก upload_file (optional)' },
+        color:          { type: 'string', enum: ['teal', 'blue', 'purple', 'orange', 'pink', 'red', 'green'], description: 'สีพื้นหลังในปฏิทิน (default: teal)' }
       },
       required: ['text', 'start_date']
+    }
+  },
+  {
+    name: 'update_appointment',
+    description: 'แก้ไขนัดหมาย เช่น เปลี่ยนเวลา สถานที่ หรือสีพื้นหลังในปฏิทิน',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        match_text:       { type: 'string', description: 'ข้อความในชื่อนัดที่ใช้ค้นหา' },
+        match_date:       { type: 'string', description: 'วันที่นัดเดิม YYYY-MM-DD (optional)' },
+        match_start_time: { type: 'string', description: 'เวลาเริ่มเดิม HH:MM (optional)' },
+        text:             { type: 'string', description: 'ชื่อใหม่ (optional)' },
+        start_date:       { type: 'string', description: 'วันที่ใหม่ YYYY-MM-DD (optional)' },
+        start_time:       { type: 'string', description: 'เวลาเริ่มใหม่ HH:MM (optional)' },
+        end_time:         { type: 'string', description: 'เวลาสิ้นสุดใหม่ HH:MM (optional)' },
+        location:         { type: 'string', description: 'สถานที่ใหม่ (optional)' },
+        color:            { type: 'string', enum: ['teal', 'blue', 'purple', 'orange', 'pink', 'red', 'green'], description: 'สีพื้นหลังใหม่ (optional)' }
+      },
+      required: ['match_text']
+    }
+  },
+  {
+    name: 'delete_appointment',
+    description: 'ลบนัดหมายออกจากปฏิทิน',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        match_text:       { type: 'string', description: 'ข้อความในชื่อนัดที่ใช้ค้นหา' },
+        match_date:       { type: 'string', description: 'วันที่นัด YYYY-MM-DD (optional)' },
+        match_start_time: { type: 'string', description: 'เวลาเริ่ม HH:MM (optional)' }
+      },
+      required: ['match_text']
     }
   },
   {
@@ -206,6 +239,41 @@ async function pbAuth(env) {
   return { token: data.token, pbUrl }
 }
 
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function appointmentDate(row) {
+  return row.start_date || row.due_date || (/^\d{4}-\d{2}-\d{2}$/.test(row.due_label || '') ? row.due_label : null)
+}
+
+function describeAppointment(item) {
+  const date = appointmentDate(item) || 'no date'
+  const time = item.start_time ? ` ${item.start_time}` : ''
+  return `"${item.text}" ${date}${time}`
+}
+
+async function findAppointment(db, input) {
+  const { rows } = await db.execute(
+    "SELECT * FROM todos WHERE item_type = 'appointment' AND done = 0 ORDER BY start_date ASC, start_time ASC, created_at DESC"
+  )
+  let matches = rows
+  const matchText = normalizeText(input.match_text)
+  if (matchText) matches = matches.filter(row => normalizeText(row.text).includes(matchText))
+  if (input.match_date) matches = matches.filter(row => appointmentDate(row) === input.match_date)
+  if (input.match_start_time) matches = matches.filter(row => row.start_time === input.match_start_time)
+  return matches
+}
+
+async function singleAppointmentMatch(db, input) {
+  const matches = await findAppointment(db, input)
+  if (matches.length === 0) throw new Error('ไม่พบนัดที่ตรงกับคำขอ')
+  if (matches.length > 1) {
+    throw new Error(`เจอนัดมากกว่า 1 รายการ: ${matches.slice(0, 5).map(describeAppointment).join(', ')}`)
+  }
+  return matches[0]
+}
+
 async function handleTool(name, input, env) {
   const db = getDb(env)
 
@@ -224,10 +292,43 @@ async function handleTool(name, input, env) {
     const id = crypto.randomUUID()
     const now = Date.now()
     await db.execute(
-      'INSERT INTO todos (id, text, done, item_type, priority, start_date, due_date, start_time, end_time, location, attachment_url, due_label, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, input.text, 0, 'appointment', 'med', input.start_date, input.start_date, input.start_time || null, input.end_time || null, input.location || '', input.attachment_url || '', input.start_date, 'upcoming', now]
+      'INSERT INTO todos (id, text, done, item_type, priority, start_date, due_date, start_time, end_time, location, attachment_url, color, due_label, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, input.text, 0, 'appointment', 'med', input.start_date, input.start_date, input.start_time || null, input.end_time || null, input.location || '', input.attachment_url || '', input.color || 'teal', input.start_date, 'upcoming', now]
     )
-    return `✅ บันทึกนัดหมาย "${input.text}" วันที่ ${input.start_date}${input.start_time ? ' เวลา ' + input.start_time : ''}${input.location ? ' ที่ ' + input.location : ''}${input.attachment_url ? ' 📎' : ''} แล้วค่ะ`
+    return `✅ บันทึกนัดหมาย "${input.text}" วันที่ ${input.start_date}${input.start_time ? ' เวลา ' + input.start_time : ''}${input.location ? ' ที่ ' + input.location : ''}${input.color ? ' สี ' + input.color : ''}${input.attachment_url ? ' 📎' : ''} แล้วค่ะ`
+  }
+
+  if (name === 'update_appointment') {
+    const appointment = await singleAppointmentMatch(db, input)
+    const fields = []
+    const values = []
+    const setField = (column, value) => {
+      fields.push(`${column} = ?`)
+      values.push(value)
+    }
+
+    if ('text' in input && input.text) setField('text', input.text)
+    if ('start_time' in input) setField('start_time', input.start_time || null)
+    if ('end_time' in input) setField('end_time', input.end_time || null)
+    if ('location' in input) setField('location', input.location || '')
+    if ('color' in input && input.color) setField('color', input.color)
+    if (input.start_date) {
+      setField('start_date', input.start_date)
+      setField('due_date', input.start_date)
+      setField('due_label', input.start_date)
+      setField('section', 'upcoming')
+    }
+    if (!fields.length) throw new Error('ไม่มีข้อมูลใหม่ให้แก้ไข')
+
+    values.push(appointment.id)
+    await db.execute(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`, values)
+    return `✅ แก้ไขนัดหมาย ${describeAppointment(appointment)} แล้วค่ะ`
+  }
+
+  if (name === 'delete_appointment') {
+    const appointment = await singleAppointmentMatch(db, input)
+    await db.execute('DELETE FROM todos WHERE id = ?', [appointment.id])
+    return `✅ ลบนัดหมาย ${describeAppointment(appointment)} แล้วค่ะ`
   }
 
   if (name === 'add_task') {
@@ -235,8 +336,8 @@ async function handleTool(name, input, env) {
     const now = Date.now()
     const dueDate = input.due_date || null
     await db.execute(
-      'INSERT INTO todos (id, text, done, item_type, priority, start_date, due_date, start_time, end_time, location, attachment_url, due_label, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [id, input.text, 0, 'task', input.priority || 'med', dueDate, dueDate, null, null, '', '', dueDate || 'today', input.section || 'today', now]
+      'INSERT INTO todos (id, text, done, item_type, priority, start_date, due_date, start_time, end_time, location, attachment_url, color, due_label, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, input.text, 0, 'task', input.priority || 'med', dueDate, dueDate, null, null, '', '', '', dueDate || 'today', input.section || 'today', now]
     )
     return `✅ เพิ่ม task "${input.text}"${dueDate ? ' (ครบกำหนด ' + dueDate + ')' : ''} แล้วค่ะ`
   }

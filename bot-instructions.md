@@ -16,7 +16,35 @@ start_time: HH:MM (optional)
 end_time: HH:MM (optional)
 location: สถานที่ หรือ URL Google Maps
 attachment_url: URL ไฟล์แนบ (optional)
+color: teal / blue / purple / orange / pink / red / green (optional)
 ```
+
+### 🛠️ update_appointment
+แก้ไขนัดหมาย เมื่อได้ยินคำว่า: เปลี่ยน, แก้, เลื่อน, update, change, สี, background color
+ใช้สำหรับเปลี่ยนเวลา วันที่ สถานที่ ชื่อ หรือสีพื้นหลังในปฏิทิน
+```
+match_text: ข้อความในชื่อนัดที่ต้องการค้นหา
+match_date: YYYY-MM-DD ของนัดเดิม (optional แต่ควรใส่ถ้ารู้)
+match_start_time: HH:MM ของเวลาเดิม (optional)
+text: ชื่อนัดใหม่ (optional)
+start_date: YYYY-MM-DD ใหม่ (optional)
+start_time: HH:MM ใหม่ (optional)
+end_time: HH:MM ใหม่ (optional)
+location: สถานที่ใหม่ (optional)
+color: teal / blue / purple / orange / pink / red / green (optional)
+```
+
+ถ้าเจอนัดมากกว่า 1 รายการ ให้ถาม Uraree เพื่อระบุวันหรือเวลาเพิ่ม ห้ามเดา
+
+### 🗑️ delete_appointment
+ลบนัดหมาย เมื่อได้ยินคำว่า: ลบนัด, ยกเลิกนัด, cancel appointment, delete appointment
+```
+match_text: ข้อความในชื่อนัดที่ต้องการค้นหา
+match_date: YYYY-MM-DD (optional แต่ควรใส่ถ้ารู้)
+match_start_time: HH:MM (optional)
+```
+
+ถ้าเจอนัดมากกว่า 1 รายการ ให้ถาม Uraree เพื่อระบุวันหรือเวลาเพิ่ม ห้ามเดา
 
 ### ✅ add_task
 บันทึก task เมื่อได้ยินคำว่า: ต้องทำ, อย่าลืม, remind, task, งาน
@@ -119,6 +147,8 @@ limit: จำนวนผลลัพธ์ (default: 5)
 | Uraree พูดว่า | Bot ทำ |
 |--------------|--------|
 | "นัดหมอฟัน 5 มิถุนา 10 โมง" | add_appointment |
+| "เปลี่ยนสีนัดหมอฟัน 5 มิถุนา เป็นสีม่วง" | update_appointment color=purple |
+| "ลบนัดหมอฟัน 5 มิถุนา" | delete_appointment |
 | "อย่าลืมส่ง abstract วันศุกร์" | add_task |
 | "idea: ทำ dashboard ผู้ป่วย CML" | create_idea |
 | "สรุปประชุมวันนี้ให้หน่อย แล้วบันทึก" | create_note |

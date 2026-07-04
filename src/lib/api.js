@@ -3,6 +3,26 @@
 
 const BASE = '/api'
 
+async function readJson(res, path) {
+  const text = await res.text()
+  if (!text.trim()) return {}
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    const err = new Error(`Invalid JSON from ${BASE + path}. Are API functions running?`)
+    err.status = res.status
+    throw err
+  }
+}
+
+function expectArray(label) {
+  return data => {
+    if (Array.isArray(data)) return data
+    throw new Error(`Expected ${label} array from API`)
+  }
+}
+
 async function req(method, path, body) {
   const opts = {
     method,
@@ -12,7 +32,7 @@ async function req(method, path, body) {
   if (body !== undefined) opts.body = JSON.stringify(body)
 
   const res = await fetch(BASE + path, opts)
-  const data = await res.json().catch(() => ({}))
+  const data = await readJson(res, path)
   if (!res.ok) {
     const err = new Error(data.error || res.statusText)
     err.status = res.status
@@ -26,35 +46,35 @@ export const login = (password) => req('POST', '/auth/login', { password })
 export const logout = () => req('DELETE', '/auth/login')
 
 // Notes
-export const getNotes = () => req('GET', '/notes')
+export const getNotes = () => req('GET', '/notes').then(expectArray('notes'))
 export const createNote = (data) => req('POST', '/notes', data)
 export const updateNote = (id, data) => req('PUT', `/notes/${id}`, data)
 export const deleteNote = (id) => req('DELETE', `/notes/${id}`)
 
 // Todos
-export const getTodos = () => req('GET', '/todos')
+export const getTodos = () => req('GET', '/todos').then(expectArray('todos'))
 export const createTodo = (data) => req('POST', '/todos', data)
 export const updateTodo = (id, data) => req('PUT', `/todos/${id}`, data)
 export const deleteTodo = (id) => req('DELETE', `/todos/${id}`)
 
 // Ideas
-export const getIdeas = () => req('GET', '/ideas')
+export const getIdeas = () => req('GET', '/ideas').then(expectArray('ideas'))
 export const createIdea = (data) => req('POST', '/ideas', data)
 export const deleteIdea = (id) => req('DELETE', `/ideas/${id}`)
 
 // Drawings
-export const getDrawings = () => req('GET', '/drawings')
+export const getDrawings = () => req('GET', '/drawings').then(expectArray('drawings'))
 export const createDrawing = (data) => req('POST', '/drawings', data)
 export const deleteDrawing = (id) => req('DELETE', `/drawings/${id}`)
 
 // Mind maps
-export const getMindMaps = () => req('GET', '/mindmaps')
+export const getMindMaps = () => req('GET', '/mindmaps').then(expectArray('mind maps'))
 export const createMindMap = (data) => req('POST', '/mindmaps', data)
 export const updateMindMap = (id, data) => req('PUT', `/mindmaps/${id}`, data)
 export const deleteMindMap = (id) => req('DELETE', `/mindmaps/${id}`)
 
 // Projects
-export const getProjects = () => req('GET', '/projects')
+export const getProjects = () => req('GET', '/projects').then(expectArray('projects'))
 export const createProject = (data) => req('POST', '/projects', data)
 export const updateProject = (id, data) => req('PUT', `/projects/${id}`, data)
 export const deleteProject = (id) => req('DELETE', `/projects/${id}`)
@@ -64,7 +84,7 @@ export const deleteProjectItem = (id) => req('DELETE', `/project-items/${id}`)
 export const syncProjectToObsidian = (id) => req('POST', `/projects/${id}/obsidian`)
 export const getPublicProject = async (slug) => {
   const res = await fetch(`${BASE}/public/projects/${encodeURIComponent(slug)}`)
-  const data = await res.json().catch(() => ({}))
+  const data = await readJson(res, `/public/projects/${encodeURIComponent(slug)}`)
   if (!res.ok) {
     const err = new Error(data.error || res.statusText)
     err.status = res.status
@@ -77,7 +97,7 @@ export const getPrivateProject = (slug) => req('GET', `/projects/by-slug/${encod
 // Library
 export const getLibraryFiles = async () => {
   const res = await fetch('/api/library', { credentials: 'same-origin' })
-  const data = await res.json().catch(() => ({}))
+  const data = await readJson(res, '/library')
   if (!res.ok) {
     const err = new Error(data.error || res.statusText)
     err.status = res.status
@@ -91,7 +111,7 @@ export const getLinks = (params) => {
   const search = params
     ? `?${new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== null)).toString()}`
     : ''
-  return req('GET', `/links${search}`)
+  return req('GET', `/links${search}`).then(expectArray('links'))
 }
 export const createLink = (data) => req('POST', '/links', data)
 export const deleteLink = (id) => req('DELETE', `/links/${id}`)
