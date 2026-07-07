@@ -1220,7 +1220,7 @@ export default function NotesPanel({
     setObsidianSyncing(true)
     try {
       const result = await syncToObsidian(currentId)
-      onSaved(currentId, { obsidian_synced: 1, obsidian_path: result.path, obsidian_synced_at: result.synced_at, updated_at: Date.now() })
+      onSaved(currentId, { obsidian_synced: 1, obsidian_path: result.path, obsidian_sha: result.sha, obsidian_synced_at: result.synced_at, updated_at: Date.now() })
       return true
     } catch (e) {
       if (!silent) alert('Sync to Obsidian failed: ' + e.message)
@@ -1286,7 +1286,7 @@ export default function NotesPanel({
       const result = await pullFromObsidian(currentId)
       setTitle(result.title)
       setBlocks(result.blocks.map(b => ({ ...b, id: crypto.randomUUID(), text: b.content || '' })))
-      onSaved(currentId, { title: result.title, obsidian_synced_at: result.synced_at, updated_at: result.synced_at })
+      onSaved(currentId, { title: result.title, obsidian_sha: result.sha, obsidian_synced_at: result.synced_at, updated_at: result.synced_at })
     } catch (e) { alert('Pull from Obsidian failed: ' + e.message) }
     finally { setObsidianSyncing(false) }
   }

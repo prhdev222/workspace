@@ -12,6 +12,12 @@ function json(data, status = 200) {
   })
 }
 
+function syncConflict(path) {
+  return json({
+    error: `GitHub has newer changes for ${path}. Pull from Obsidian first, review it, then push again.`
+  }, 409)
+}
+
 async function ensureNoteColumns(db) {
   const { rows: columns } = await db.execute('PRAGMA table_info(notes)')
   const names = new Set(columns.map(column => column.name))
@@ -226,8 +232,12 @@ export async function onRequestPost({ params, env }) {
     const previousPath = note.obsidian_path || null
     const filePath = desiredPath
 
-    // Get existing SHA (needed for update)
+    // Get existing SHA (needed for update). If GitHub changed since the last
+    // successful workspace sync, stop instead of overwriting Mac edits.
     const existing = await githubGet(env, filePath)
+    if (existing?.sha && note.obsidian_sha && existing.sha !== note.obsidian_sha) {
+      return syncConflict(filePath)
+    }
     const sha = existing?.sha || null
 
     // Push to GitHub
