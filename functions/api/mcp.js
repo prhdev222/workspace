@@ -20,7 +20,7 @@ const GARAGE_BUCKET = 'workspace-bigfiles'
 const TOOLS = [
   {
     name: 'upload_file',
-    description: 'อัปโหลดไฟล์ (PDF, รูป) ขึ้น R2 แล้วได้ URL สำหรับแนบใน appointment',
+    description: 'อัปโหลดไฟล์ (PDF, รูป) ขึ้น R2 แล้วได้ URL สำหรับแนบใน appointment — สูงสุด 200MB (ไฟล์ใหญ่กว่านั้นใช้ upload_bigfile แทน)',
     inputSchema: {
       type: 'object',
       properties: {
