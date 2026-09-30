@@ -3,6 +3,7 @@
 // Returns { url } public URL, served via the Garage S3 API tunnel
 
 import { AwsClient } from 'aws4fetch'
+import { getDb } from './_db.js'
 
 const GARAGE_ENDPOINT = 'https://s3.uraree.com'
 const GARAGE_REGION = 'garage'
@@ -64,7 +65,21 @@ export async function onRequestPost({ request, env }) {
     return json({ error: `Garage upload failed: ${putRes.status}` }, 502)
   }
 
-  return json({ url: `${GARAGE_ENDPOINT}/${GARAGE_BUCKET}/${key}`, key, name: file.name, size: file.size })
+  const url = `${GARAGE_ENDPOINT}/${GARAGE_BUCKET}/${key}`
+  const tagsRaw = formData.get('tags')
+  const tags = typeof tagsRaw === 'string'
+    ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
+    : []
+
+  if (env.TURSO_URL) {
+    const db = getDb(env)
+    await db.execute(
+      'INSERT INTO files (id, key, name, url, destination, tags, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [crypto.randomUUID(), key, file.name, url, 'garage', JSON.stringify(tags), file.size, Date.now()]
+    )
+  }
+
+  return json({ url, key, name: file.name, size: file.size, tags })
 }
 
 export async function onRequestOptions() {

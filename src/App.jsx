@@ -10,8 +10,7 @@ import ProjectsPanel from './components/ProjectsPanel'
 import PublicProjectPage from './components/PublicProjectPage'
 import AIAssistant from './components/AIAssistant'
 import DailyBriefing from './components/DailyBriefing'
-import BookUploadPanel from './components/BookUploadPanel'
-import BigFilePanel from './components/BigFilePanel'
+import FilesPanel from './components/FilesPanel'
 import { getNotes, getTodos, getIdeas, getDrawings, getMindMaps, getLinks, getProjects, getLibraryFiles, createNote, deleteTodo, logout } from './lib/api'
 
 const STALE_TODO_TEXTS = new Set([
@@ -25,8 +24,7 @@ const VIEWS = [
   { id: 'ideas',   label: 'Ideas',    icon: 'ti-bulb' },
   { id: 'drawings', label: 'Draw',     icon: 'ti-pencil' },
   { id: 'projects', label: 'Projects', icon: 'ti-world-share' },
-  { id: 'library', label: 'Library',  icon: 'ti-books' },
-  { id: 'bigfiles', label: 'Big Files', icon: 'ti-server-2' },
+  { id: 'files', label: 'Files',  icon: 'ti-files' },
 ]
 
 export default function App() {
@@ -528,8 +526,7 @@ export default function App() {
         {view === 'ideas' && <IdeasPanel ideas={ideas} setIdeas={setIdeas} isMobile={isMobile} externalSearch={globalSearch} selectedIdeaId={selectedIdeaId} setSelectedIdeaId={setSelectedIdeaId} links={links} setLinks={setLinks} entities={{ notes, todos, ideas, drawings, mindMaps, projects, libraryFiles }} onNavigate={navigateToEntity} />}
         {view === 'drawings' && <DrawingsPanel drawings={drawings} setDrawings={setDrawings} isMobile={isMobile} externalSearch={globalSearch} />}
         {view === 'projects' && <ProjectsPanel projects={projects} setProjects={setProjects} entities={{ notes, todos, ideas, drawings, mindMaps, libraryFiles }} isMobile={isMobile} onNavigate={navigateToEntity} />}
-        {view === 'library' && <BookUploadPanel isMobile={isMobile} />}
-        {view === 'bigfiles' && <BigFilePanel isMobile={isMobile} />}
+        {view === 'files' && <FilesPanel isMobile={isMobile} />}
       </div>
     </div>
   )

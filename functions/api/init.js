@@ -92,6 +92,16 @@ export async function onRequestGet({ env }) {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )`,
+      `CREATE TABLE IF NOT EXISTS files (
+        id TEXT PRIMARY KEY,
+        key TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        destination TEXT NOT NULL DEFAULT 'r2',
+        tags TEXT NOT NULL DEFAULT '[]',
+        size INTEGER NOT NULL DEFAULT 0,
+        uploaded_at INTEGER NOT NULL
+      )`,
       `CREATE TABLE IF NOT EXISTS project_items (
         id TEXT PRIMARY KEY,
         project_id TEXT NOT NULL,

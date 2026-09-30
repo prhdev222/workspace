@@ -1,8 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 
-const DIGITAL_LIBRARY_URL = 'https://digital-library.uraree.com'
-const R2_PUBLIC_URL = 'https://pub-ab79910c37a84799a9cf9f45fe44da06.r2.dev'
-
 const TYPE_ICON = {
   pdf:     'ti-file-type-pdf',
   epub:    'ti-book',
@@ -25,10 +22,16 @@ const TYPE_COLOR = {
   image: '#B7791F',
 }
 
+const DESTINATIONS = {
+  r2:     { label: 'R2 (≤200MB)', endpoint: '/api/upload' },
+  garage: { label: 'Garage (≤2GB)', endpoint: '/api/bigfile-upload' },
+}
+
 function formatSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
 function formatDate(iso) {
@@ -36,13 +39,16 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
 }
 
+function btnStyle(bg, color) {
+  return {
+    padding: '6px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)',
+    background: bg, color, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
+    fontFamily: 'inherit'
+  }
+}
+
 function FileViewer({ file, onClose, onDelete, isMobile }) {
   if (!file) return null
-
-  function addToLibrary() {
-    const params = new URLSearchParams({ fileUrl: file.url, fileName: file.name })
-    window.open(`${DIGITAL_LIBRARY_URL}/admin/books/add?${params}`, '_blank')
-  }
 
   const viewerStyle = {
     position: isMobile ? 'fixed' : 'relative',
@@ -57,7 +63,6 @@ function FileViewer({ file, onClose, onDelete, isMobile }) {
 
   return (
     <div style={viewerStyle}>
-      {/* Viewer header */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '10px',
         padding: '12px 14px', borderBottom: '0.5px solid var(--color-border-tertiary)',
@@ -70,14 +75,10 @@ function FileViewer({ file, onClose, onDelete, isMobile }) {
             {file.name}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
-            {formatSize(file.size)} · {formatDate(file.uploaded)}
+            {formatSize(file.size)} · {formatDate(file.uploaded)} · {DESTINATIONS[file.destination]?.label || file.destination}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-          <button onClick={addToLibrary} title="เพิ่มใน Digital Library" style={btnStyle('#1D9E75', 'white')}>
-            <i className="ti ti-books" style={{ fontSize: '13px' }} />
-            {!isMobile && <span style={{ fontSize: '11px' }}>Add to Library</span>}
-          </button>
           <a href={file.url} download={file.name} title="Download" style={{ ...btnStyle('var(--color-background-primary)', 'var(--color-text-secondary)'), textDecoration: 'none' }}>
             <i className="ti ti-download" style={{ fontSize: '13px' }} />
           </a>
@@ -90,14 +91,9 @@ function FileViewer({ file, onClose, onDelete, isMobile }) {
         </div>
       </div>
 
-      {/* Viewer body */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', background: '#1a1a1a' }}>
         {file.type === 'pdf' && (
-          <iframe
-            src={file.url}
-            style={{ width: '100%', height: '100%', border: 'none' }}
-            title={file.name}
-          />
+          <iframe src={file.url} style={{ width: '100%', height: '100%', border: 'none' }} title={file.name} />
         )}
         {file.type === 'image' && (
           <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
@@ -129,21 +125,21 @@ function FileViewer({ file, onClose, onDelete, isMobile }) {
             </a>
           </div>
         )}
+        {file.tags?.length > 0 && (
+          <div style={{ position: 'absolute', bottom: '16px', left: '16px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {file.tags.map(t => (
+              <span key={t} style={{ fontSize: '11px', padding: '3px 9px', borderRadius: '99px', background: 'rgba(29,158,117,0.85)', color: 'white' }}>{t}</span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-function btnStyle(bg, color) {
-  return {
-    padding: '6px 10px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)',
-    background: bg, color, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px',
-    fontFamily: 'inherit'
-  }
-}
-
-export default function BookUploadPanel({ isMobile }) {
+export default function FilesPanel({ isMobile }) {
   const [files, setFiles] = useState([])
+  const [allTags, setAllTags] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [showUpload, setShowUpload] = useState(false)
@@ -151,18 +147,23 @@ export default function BookUploadPanel({ isMobile }) {
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [uploadError, setUploadError] = useState('')
-  const [uploadDone, setUploadDone] = useState(null) // { url, name, key, size, type }
   const [search, setSearch] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [destination, setDestination] = useState('r2')
+  const [pendingTags, setPendingTags] = useState('')
+  const [pendingFile, setPendingFile] = useState(null)
   const inputRef = useRef()
 
-  useEffect(() => { loadFiles() }, [])
+  useEffect(() => { loadFiles() }, [tagFilter])
 
   async function loadFiles() {
     setLoading(true)
     try {
-      const res = await fetch('/api/library')
+      const qs = tagFilter ? `?tag=${encodeURIComponent(tagFilter)}` : ''
+      const res = await fetch(`/api/files${qs}`)
       const data = await res.json()
       setFiles(data.files || [])
+      setAllTags(data.allTags || [])
     } catch {
       setFiles([])
     } finally {
@@ -170,16 +171,23 @@ export default function BookUploadPanel({ isMobile }) {
     }
   }
 
-  async function uploadFile(f) {
+  function pickFile(f) {
+    setPendingFile(f)
+    setPendingTags('')
+  }
+
+  async function confirmUpload() {
+    if (!pendingFile) return
     setUploadError('')
     setUploading(true)
     setProgress(0)
     try {
       const form = new FormData()
-      form.append('file', f)
-      const result = await new Promise((resolve, reject) => {
+      form.append('file', pendingFile)
+      form.append('tags', pendingTags)
+      await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/upload')
+        xhr.open('POST', DESTINATIONS[destination].endpoint)
         xhr.upload.onprogress = e => { if (e.lengthComputable) setProgress(Math.round(e.loaded / e.total * 100)) }
         xhr.onload = () => {
           if (xhr.status === 200) resolve(JSON.parse(xhr.responseText))
@@ -188,10 +196,10 @@ export default function BookUploadPanel({ isMobile }) {
         xhr.onerror = () => reject(new Error('Network error'))
         xhr.send(form)
       })
+      setPendingFile(null)
+      setPendingTags('')
       await loadFiles()
       setShowUpload(false)
-      // show choice: keep in library OR add to digital-library
-      setUploadDone({ url: result.url, key: result.key, name: f.name, size: f.size, type: detectTypeFromName(f.name) })
     } catch (e) {
       setUploadError(e.message)
     } finally {
@@ -199,19 +207,10 @@ export default function BookUploadPanel({ isMobile }) {
     }
   }
 
-  function detectTypeFromName(name) {
-    const ext = name.split('.').pop().toLowerCase()
-    if (ext === 'pdf') return 'pdf'
-    if (['mp4','webm','mov'].includes(ext)) return 'video'
-    if (['mp3','wav','m4a'].includes(ext)) return 'audio'
-    if (['jpg','jpeg','png','gif','webp'].includes(ext)) return 'image'
-    return 'file'
-  }
-
   async function handleDelete(file) {
-    if (!confirm(`ลบ "${file.name}" ออกจาก R2?\nไม่สามารถกู้คืนได้`)) return
+    if (!confirm(`ลบ "${file.name}" ออกจาก ${DESTINATIONS[file.destination]?.label || file.destination}?\nไม่สามารถกู้คืนได้`)) return
     try {
-      await fetch(`/api/library?key=${encodeURIComponent(file.key)}`, { method: 'DELETE' })
+      await fetch(`/api/files?key=${encodeURIComponent(file.key)}&destination=${file.destination}`, { method: 'DELETE' })
       setSelected(null)
       await loadFiles()
     } catch {
@@ -222,22 +221,20 @@ export default function BookUploadPanel({ isMobile }) {
   const onDrop = useCallback(e => {
     e.preventDefault(); setDragging(false)
     const f = e.dataTransfer.files[0]
-    if (f) uploadFile(f)
+    if (f) pickFile(f)
   }, [])
 
   const filtered = files.filter(f => f.name.toLowerCase().includes(search.toLowerCase()))
-
   const splitView = !isMobile && selected
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-      {/* Top bar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px',
         borderBottom: '0.5px solid var(--color-border-tertiary)', background: 'var(--color-background-secondary)', flexShrink: 0
       }}>
-        <i className="ti ti-books" style={{ fontSize: '16px', color: '#1D9E75' }} />
-        <span style={{ fontSize: '14px', fontWeight: '600' }}>Library</span>
+        <i className="ti ti-files" style={{ fontSize: '16px', color: '#1D9E75' }} />
+        <span style={{ fontSize: '14px', fontWeight: '600' }}>Files</span>
         <span style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', background: 'var(--color-border-tertiary)', padding: '1px 7px', borderRadius: '99px' }}>
           {files.length}
         </span>
@@ -264,93 +261,108 @@ export default function BookUploadPanel({ isMobile }) {
         </button>
       </div>
 
-      {/* Upload zone (collapsible) */}
+      {allTags.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '10px 16px', borderBottom: '0.5px solid var(--color-border-tertiary)', flexShrink: 0 }}>
+          <button
+            onClick={() => setTagFilter('')}
+            style={{
+              fontSize: '11px', padding: '3px 10px', borderRadius: '99px', border: 'none', cursor: 'pointer',
+              background: tagFilter === '' ? '#1D9E75' : 'var(--color-border-tertiary)',
+              color: tagFilter === '' ? 'white' : 'var(--color-text-secondary)'
+            }}
+          >ทั้งหมด</button>
+          {allTags.map(t => (
+            <button
+              key={t}
+              onClick={() => setTagFilter(t)}
+              style={{
+                fontSize: '11px', padding: '3px 10px', borderRadius: '99px', border: 'none', cursor: 'pointer',
+                background: tagFilter === t ? '#1D9E75' : 'var(--color-border-tertiary)',
+                color: tagFilter === t ? 'white' : 'var(--color-text-secondary)'
+              }}
+            >{t}</button>
+          ))}
+        </div>
+      )}
+
       {showUpload && (
         <div style={{ padding: '12px 16px', borderBottom: '0.5px solid var(--color-border-tertiary)', background: 'var(--color-background-secondary)', flexShrink: 0 }}>
-          <div
-            onDrop={onDrop}
-            onDragOver={e => { e.preventDefault(); setDragging(true) }}
-            onDragLeave={() => setDragging(false)}
-            onClick={() => !uploading && inputRef.current?.click()}
-            style={{
-              border: `2px dashed ${dragging ? '#1D9E75' : 'var(--color-border-secondary)'}`,
-              borderRadius: '12px', padding: '20px', textAlign: 'center',
-              cursor: uploading ? 'default' : 'pointer',
-              background: dragging ? '#E1F5EE' : 'transparent', transition: 'all 0.15s'
-            }}
-          >
-            <input ref={inputRef} type="file" accept=".pdf,.epub,.doc,.docx,.ppt,.pptx,.mp3,.mp4,.jpg,.jpeg,.png,.zip"
-              style={{ display: 'none' }} onChange={e => e.target.files[0] && uploadFile(e.target.files[0])} />
-            {uploading ? (
-              <div>
-                <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>กำลังอัปโหลด... {progress}%</div>
-                <div style={{ background: 'var(--color-border-tertiary)', borderRadius: '99px', height: '5px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${progress}%`, background: '#1D9E75', borderRadius: '99px', transition: 'width 0.2s' }} />
-                </div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+            {Object.entries(DESTINATIONS).map(([key, d]) => (
+              <button
+                key={key}
+                onClick={() => setDestination(key)}
+                style={{
+                  flex: 1, padding: '8px', borderRadius: '8px', border: '0.5px solid var(--color-border-secondary)',
+                  cursor: 'pointer', fontSize: '12px', fontFamily: 'inherit',
+                  background: destination === key ? '#1D9E75' : 'var(--color-background-primary)',
+                  color: destination === key ? 'white' : 'var(--color-text-secondary)'
+                }}
+              >{d.label}</button>
+            ))}
+          </div>
+
+          {pendingFile ? (
+            <div>
+              <div style={{ fontSize: '12px', marginBottom: '8px', color: 'var(--color-text-secondary)' }}>
+                <i className="ti ti-paperclip" style={{ marginRight: '4px' }} />
+                {pendingFile.name} · {formatSize(pendingFile.size)}
               </div>
-            ) : (
+              <input
+                value={pendingTags}
+                onChange={e => setPendingTags(e.target.value)}
+                placeholder="tags คั่นด้วย comma เช่น chula, slides"
+                disabled={uploading}
+                style={{
+                  width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: '8px',
+                  border: '0.5px solid var(--color-border-secondary)', background: 'var(--color-background-primary)',
+                  color: 'var(--color-text-primary)', fontSize: '12px', outline: 'none', fontFamily: 'inherit', marginBottom: '8px'
+                }}
+              />
+              {uploading ? (
+                <div>
+                  <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', marginBottom: '8px' }}>กำลังอัปโหลด... {progress}%</div>
+                  <div style={{ background: 'var(--color-border-tertiary)', borderRadius: '99px', height: '5px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: '100%', background: '#1D9E75', borderRadius: '99px', transformOrigin: 'left', transform: `scaleX(${progress / 100})`, transition: 'transform 0.2s' }} />
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={confirmUpload} style={{ ...btnStyle('#1D9E75', 'white'), flex: 1, justifyContent: 'center', fontSize: '12px' }}>
+                    <i className="ti ti-upload" style={{ fontSize: '13px' }} />
+                    อัปโหลดไป {DESTINATIONS[destination].label}
+                  </button>
+                  <button onClick={() => setPendingFile(null)} style={{ ...btnStyle('var(--color-background-primary)', 'var(--color-text-secondary)'), fontSize: '12px' }}>
+                    ยกเลิก
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div
+              onDrop={onDrop}
+              onDragOver={e => { e.preventDefault(); setDragging(true) }}
+              onDragLeave={() => setDragging(false)}
+              onClick={() => inputRef.current?.click()}
+              style={{
+                border: `2px dashed ${dragging ? '#1D9E75' : 'var(--color-border-secondary)'}`,
+                borderRadius: '12px', padding: '20px', textAlign: 'center', cursor: 'pointer',
+                background: dragging ? '#E1F5EE' : 'transparent', transition: 'all 0.15s'
+              }}
+            >
+              <input ref={inputRef} type="file"
+                style={{ display: 'none' }} onChange={e => e.target.files[0] && pickFile(e.target.files[0])} />
               <div style={{ fontSize: '12px', color: 'var(--color-text-tertiary)' }}>
                 <i className="ti ti-cloud-upload" style={{ fontSize: '20px', display: 'block', marginBottom: '6px', color: '#1D9E75' }} />
-                วางไฟล์ที่นี่ หรือคลิกเพื่อเลือก — PDF, EPUB, DOCX, MP3, MP4, ZIP (สูงสุด 200MB)
+                วางไฟล์ที่นี่ หรือคลิกเพื่อเลือก — เลือกปลายทางด้านบนก่อนอัปโหลด
               </div>
-            )}
-          </div>
-              {uploadError && <div style={{ marginTop: '8px', fontSize: '12px', color: '#DC2626' }}>{uploadError}</div>}
+            </div>
+          )}
+          {uploadError && <div style={{ marginTop: '8px', fontSize: '12px', color: '#DC2626' }}>{uploadError}</div>}
         </div>
       )}
 
-      {/* Post-upload choice */}
-      {uploadDone && (
-        <div style={{
-          margin: '12px 16px', borderRadius: '14px', overflow: 'hidden',
-          border: '1px solid #9FE1CB', flexShrink: 0
-        }}>
-          <div style={{ padding: '12px 14px', background: '#E1F5EE', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <i className={`ti ${TYPE_ICON[uploadDone.type] || 'ti-file'}`}
-               style={{ fontSize: '18px', color: '#1D9E75', flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '13px', fontWeight: '600', color: '#085041' }}>อัปโหลดสำเร็จ</div>
-              <div style={{ fontSize: '11px', color: '#1D9E75', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {uploadDone.name} · {formatSize(uploadDone.size)}
-              </div>
-            </div>
-            <button onClick={() => setUploadDone(null)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1D9E75', padding: '2px', flexShrink: 0 }}>
-              <i className="ti ti-x" style={{ fontSize: '14px' }} />
-            </button>
-          </div>
-          <div style={{ padding: '12px 14px', background: 'var(--color-background-secondary)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ fontSize: '12px', color: 'var(--color-text-secondary)', width: '100%', marginBottom: '4px' }}>
-              ต้องการทำอะไรกับไฟล์นี้?
-            </div>
-            <button
-              onClick={() => {
-                setSelected({ ...uploadDone, uploaded: new Date().toISOString() })
-                setUploadDone(null)
-              }}
-              style={{ ...btnStyle('var(--color-background-primary)', 'var(--color-text-primary)'), fontSize: '12px', flex: 1 }}
-            >
-              <i className="ti ti-eye" style={{ fontSize: '13px' }} />
-              เปิดอ่านใน Workspace
-            </button>
-            <button
-              onClick={() => {
-                const params = new URLSearchParams({ fileUrl: uploadDone.url, fileName: uploadDone.name })
-                window.open(`${DIGITAL_LIBRARY_URL}/admin/books/add?${params}`, '_blank')
-                setUploadDone(null)
-              }}
-              style={{ ...btnStyle('#1D9E75', 'white'), fontSize: '12px', flex: 1 }}
-            >
-              <i className="ti ti-books" style={{ fontSize: '13px' }} />
-              เพิ่มใน Digital Library
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Main area */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-        {/* File list */}
         <div style={{
           width: splitView ? '280px' : '100%', flexShrink: 0,
           overflowY: 'auto', borderRight: splitView ? '0.5px solid var(--color-border-tertiary)' : 'none'
@@ -387,6 +399,7 @@ export default function BookUploadPanel({ isMobile }) {
                       </div>
                       <div style={{ fontSize: '10px', color: isSelected ? '#1D9E75' : 'var(--color-text-tertiary)', marginTop: '2px' }}>
                         {formatSize(f.size)} · {formatDate(f.uploaded)}
+                        {f.tags?.length > 0 && ` · ${f.tags.join(', ')}`}
                       </div>
                     </div>
                     <i className="ti ti-chevron-right" style={{ fontSize: '12px', color: 'var(--color-text-tertiary)', flexShrink: 0 }} />
@@ -397,17 +410,10 @@ export default function BookUploadPanel({ isMobile }) {
           )}
         </div>
 
-        {/* Viewer */}
         {selected && (
-          <FileViewer
-            file={selected}
-            onClose={() => setSelected(null)}
-            onDelete={handleDelete}
-            isMobile={isMobile}
-          />
+          <FileViewer file={selected} onClose={() => setSelected(null)} onDelete={handleDelete} isMobile={isMobile} />
         )}
 
-        {/* Empty viewer placeholder (desktop only) */}
         {!selected && !isMobile && files.length > 0 && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '12px', color: 'var(--color-text-tertiary)' }}>
             <i className="ti ti-file-search" style={{ fontSize: '40px' }} />

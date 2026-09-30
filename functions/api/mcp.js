@@ -20,26 +20,28 @@ const GARAGE_BUCKET = 'workspace-bigfiles'
 const TOOLS = [
   {
     name: 'upload_file',
-    description: 'อัปโหลดไฟล์ (PDF, รูป) ขึ้น R2 แล้วได้ URL สำหรับแนบใน appointment — สูงสุด 200MB (ไฟล์ใหญ่กว่านั้นใช้ upload_bigfile แทน)',
+    description: 'อัปโหลดไฟล์ (PDF, รูป) ขึ้น R2 แล้วได้ URL สำหรับแนบใน appointment — สูงสุด 200MB. ถ้าไฟล์ใหญ่กว่า 200MB หรือผู้ใช้ไม่ได้ระบุชัดเจนว่าจะเก็บที่ไหน ให้ถามผู้ใช้ก่อนว่าจะใช้ R2 หรือ Garage (upload_bigfile) แทนที่จะเดาเอง',
     inputSchema: {
       type: 'object',
       properties: {
         filename: { type: 'string', description: 'ชื่อไฟล์ เช่น meeting.pdf' },
         data:     { type: 'string', description: 'base64 encoded file content' },
-        mime_type:{ type: 'string', description: 'เช่น application/pdf หรือ image/jpeg' }
+        mime_type:{ type: 'string', description: 'เช่น application/pdf หรือ image/jpeg' },
+        tags:     { type: 'string', description: 'tags คั่นด้วย comma เช่น "chula, slides" (optional)' }
       },
       required: ['filename', 'data']
     }
   },
   {
     name: 'upload_bigfile',
-    description: 'อัปโหลดไฟล์ขนาดใหญ่ (สูงสุด 2GB) ขึ้น Garage (self-hosted, ไม่ใช่ R2) แล้วได้ URL — ใช้เมื่อไฟล์ใหญ่เกิน 200MB ของ upload_file',
+    description: 'อัปโหลดไฟล์ขนาดใหญ่ (สูงสุด 2GB) ขึ้น Garage (self-hosted, ไม่ใช่ R2) แล้วได้ URL — ใช้เมื่อไฟล์ใหญ่เกิน 200MB ของ upload_file หรือผู้ใช้ระบุชัดเจนว่าอยากเก็บที่ Garage',
     inputSchema: {
       type: 'object',
       properties: {
         filename: { type: 'string', description: 'ชื่อไฟล์ เช่น lecture-recording.mp4' },
         data:     { type: 'string', description: 'base64 encoded file content' },
-        mime_type:{ type: 'string', description: 'เช่น video/mp4 หรือ application/zip' }
+        mime_type:{ type: 'string', description: 'เช่น video/mp4 หรือ application/zip' },
+        tags:     { type: 'string', description: 'tags คั่นด้วย comma เช่น "chula, lecture" (optional)' }
       },
       required: ['filename', 'data']
     }
@@ -296,18 +298,25 @@ async function handleTool(name, input, env) {
 
   if (name === 'upload_file') {
     if (!env.R2) throw new Error('R2 binding not configured')
-    const { filename, data, mime_type = 'application/octet-stream' } = input
+    const { filename, data, mime_type = 'application/octet-stream', tags: tagsRaw = '' } = input
     const ext = filename.split('.').pop().toLowerCase()
     const key = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`
     const binary = Uint8Array.from(atob(data), c => c.charCodeAt(0))
     await env.R2.put(key, binary, { httpMetadata: { contentType: mime_type } })
     const url = `${R2_PUBLIC_URL}/${key}`
+    const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
+    if (env.TURSO_URL) {
+      await db.execute(
+        'INSERT INTO files (id, key, name, url, destination, tags, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [crypto.randomUUID(), key, filename, url, 'r2', JSON.stringify(tags), binary.length, Date.now()]
+      )
+    }
     return `✅ อัปโหลดสำเร็จ\nURL: ${url}`
   }
 
   if (name === 'upload_bigfile') {
     if (!env.MINIO_ACCESS_KEY || !env.MINIO_SECRET_KEY) throw new Error('Garage credentials not configured')
-    const { filename, data, mime_type = 'application/octet-stream' } = input
+    const { filename, data, mime_type = 'application/octet-stream', tags: tagsRaw = '' } = input
     const ext = filename.split('.').pop().toLowerCase()
     const key = `bigfiles/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`
     const binary = Uint8Array.from(atob(data), c => c.charCodeAt(0))
@@ -324,6 +333,13 @@ async function handleTool(name, input, env) {
     })
     if (!putRes.ok) throw new Error(`Garage upload failed: ${putRes.status}`)
     const url = `${GARAGE_ENDPOINT}/${GARAGE_BUCKET}/${key}`
+    const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
+    if (env.TURSO_URL) {
+      await db.execute(
+        'INSERT INTO files (id, key, name, url, destination, tags, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [crypto.randomUUID(), key, filename, url, 'garage', JSON.stringify(tags), binary.length, Date.now()]
+      )
+    }
     return `✅ อัปโหลดไฟล์ใหญ่สำเร็จ\nURL: ${url}`
   }
 
