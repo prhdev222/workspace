@@ -11,6 +11,7 @@ import PublicProjectPage from './components/PublicProjectPage'
 import AIAssistant from './components/AIAssistant'
 import DailyBriefing from './components/DailyBriefing'
 import BookUploadPanel from './components/BookUploadPanel'
+import BigFilePanel from './components/BigFilePanel'
 import { getNotes, getTodos, getIdeas, getDrawings, getMindMaps, getLinks, getProjects, getLibraryFiles, createNote, deleteTodo, logout } from './lib/api'
 
 const STALE_TODO_TEXTS = new Set([
@@ -25,6 +26,7 @@ const VIEWS = [
   { id: 'drawings', label: 'Draw',     icon: 'ti-pencil' },
   { id: 'projects', label: 'Projects', icon: 'ti-world-share' },
   { id: 'library', label: 'Library',  icon: 'ti-books' },
+  { id: 'bigfiles', label: 'Big Files', icon: 'ti-server-2' },
 ]
 
 export default function App() {
@@ -527,6 +529,7 @@ export default function App() {
         {view === 'drawings' && <DrawingsPanel drawings={drawings} setDrawings={setDrawings} isMobile={isMobile} externalSearch={globalSearch} />}
         {view === 'projects' && <ProjectsPanel projects={projects} setProjects={setProjects} entities={{ notes, todos, ideas, drawings, mindMaps, libraryFiles }} isMobile={isMobile} onNavigate={navigateToEntity} />}
         {view === 'library' && <BookUploadPanel isMobile={isMobile} />}
+        {view === 'bigfiles' && <BigFilePanel isMobile={isMobile} />}
       </div>
     </div>
   )

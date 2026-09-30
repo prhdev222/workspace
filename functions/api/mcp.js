@@ -3,6 +3,7 @@
 // POST /api/mcp  — MCP JSON-RPC over HTTP
 
 import { getDb } from './_db.js'
+import { AwsClient } from 'aws4fetch'
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -12,6 +13,9 @@ function json(data, status = 200) {
 }
 
 const R2_PUBLIC_URL = 'https://pub-ab79910c37a84799a9cf9f45fe44da06.r2.dev'
+const GARAGE_ENDPOINT = 'https://s3.uraree.com'
+const GARAGE_REGION = 'garage'
+const GARAGE_BUCKET = 'workspace-bigfiles'
 
 const TOOLS = [
   {
@@ -23,6 +27,19 @@ const TOOLS = [
         filename: { type: 'string', description: 'ชื่อไฟล์ เช่น meeting.pdf' },
         data:     { type: 'string', description: 'base64 encoded file content' },
         mime_type:{ type: 'string', description: 'เช่น application/pdf หรือ image/jpeg' }
+      },
+      required: ['filename', 'data']
+    }
+  },
+  {
+    name: 'upload_bigfile',
+    description: 'อัปโหลดไฟล์ขนาดใหญ่ (สูงสุด 2GB) ขึ้น Garage (self-hosted, ไม่ใช่ R2) แล้วได้ URL — ใช้เมื่อไฟล์ใหญ่เกิน 200MB ของ upload_file',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filename: { type: 'string', description: 'ชื่อไฟล์ เช่น lecture-recording.mp4' },
+        data:     { type: 'string', description: 'base64 encoded file content' },
+        mime_type:{ type: 'string', description: 'เช่น video/mp4 หรือ application/zip' }
       },
       required: ['filename', 'data']
     }
@@ -286,6 +303,28 @@ async function handleTool(name, input, env) {
     await env.R2.put(key, binary, { httpMetadata: { contentType: mime_type } })
     const url = `${R2_PUBLIC_URL}/${key}`
     return `✅ อัปโหลดสำเร็จ\nURL: ${url}`
+  }
+
+  if (name === 'upload_bigfile') {
+    if (!env.MINIO_ACCESS_KEY || !env.MINIO_SECRET_KEY) throw new Error('Garage credentials not configured')
+    const { filename, data, mime_type = 'application/octet-stream' } = input
+    const ext = filename.split('.').pop().toLowerCase()
+    const key = `bigfiles/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`
+    const binary = Uint8Array.from(atob(data), c => c.charCodeAt(0))
+    const aws = new AwsClient({
+      accessKeyId: env.MINIO_ACCESS_KEY,
+      secretAccessKey: env.MINIO_SECRET_KEY,
+      region: GARAGE_REGION,
+      service: 's3'
+    })
+    const putRes = await aws.fetch(`${GARAGE_ENDPOINT}/${GARAGE_BUCKET}/${key}`, {
+      method: 'PUT',
+      body: binary,
+      headers: { 'Content-Type': mime_type }
+    })
+    if (!putRes.ok) throw new Error(`Garage upload failed: ${putRes.status}`)
+    const url = `${GARAGE_ENDPOINT}/${GARAGE_BUCKET}/${key}`
+    return `✅ อัปโหลดไฟล์ใหญ่สำเร็จ\nURL: ${url}`
   }
 
   if (name === 'add_appointment') {
