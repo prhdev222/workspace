@@ -149,6 +149,7 @@ export default function FilesPanel({ isMobile }) {
   const [uploadError, setUploadError] = useState('')
   const [search, setSearch] = useState('')
   const [tagFilter, setTagFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
   const [destination, setDestination] = useState('r2')
   const [pendingTags, setPendingTags] = useState('')
   const [pendingFile, setPendingFile] = useState(null)
@@ -224,7 +225,10 @@ export default function FilesPanel({ isMobile }) {
     if (f) pickFile(f)
   }, [])
 
-  const filtered = files.filter(f => f.name.toLowerCase().includes(search.toLowerCase()))
+  const allTypes = [...new Set(files.map(f => f.type))].sort()
+  const filtered = files
+    .filter(f => f.name.toLowerCase().includes(search.toLowerCase()))
+    .filter(f => !typeFilter || f.type === typeFilter)
   const splitView = !isMobile && selected
 
   return (
@@ -281,6 +285,35 @@ export default function FilesPanel({ isMobile }) {
                 color: tagFilter === t ? 'white' : 'var(--color-text-secondary)'
               }}
             >{t}</button>
+          ))}
+        </div>
+      )}
+
+      {allTypes.length > 1 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '10px 16px', borderBottom: '0.5px solid var(--color-border-tertiary)', flexShrink: 0 }}>
+          <button
+            onClick={() => setTypeFilter('')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '4px',
+              fontSize: '11px', padding: '3px 10px', borderRadius: '99px', border: 'none', cursor: 'pointer',
+              background: typeFilter === '' ? '#1D9E75' : 'var(--color-border-tertiary)',
+              color: typeFilter === '' ? 'white' : 'var(--color-text-secondary)'
+            }}
+          >ทุกประเภท</button>
+          {allTypes.map(t => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '4px',
+                fontSize: '11px', padding: '3px 10px', borderRadius: '99px', border: 'none', cursor: 'pointer',
+                background: typeFilter === t ? '#1D9E75' : 'var(--color-border-tertiary)',
+                color: typeFilter === t ? 'white' : 'var(--color-text-secondary)'
+              }}
+            >
+              <i className={`ti ${TYPE_ICON[t] || 'ti-file'}`} style={{ fontSize: '12px' }} />
+              {t}
+            </button>
           ))}
         </div>
       )}
